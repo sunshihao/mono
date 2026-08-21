@@ -97,6 +97,7 @@ export class PluginRegistry {
                 cfg: parsed.data,
                 strict: this.opts.strict ?? false,
                 onShutdown: (fn) => this.shutdownFns.push(fn),
+                getServices: () => services,
             };
             try {
                 const result: PluginResult<unknown> = await plugin.init(ctx);

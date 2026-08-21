@@ -1,13 +1,12 @@
 import { serve } from "@hono/node-server";
-import type { Hono } from "hono";
-import { createApp } from "./app.js";
+import { createApp, type CoreApp } from "./app.js";
 import { env } from "./config/env.js";
 import { createLogger } from "./lib/logger.js";
 import { plugins } from "./plugins/index.js";
-import type { AppEnv } from "./types.js";
 
 export interface RunningServer {
-    app: Hono<AppEnv>;
+    /** 核心路由 Schema 已累积（AppType/hono-client 依赖） */
+    app: CoreApp;
     dispose: () => Promise<void>;
 }
 

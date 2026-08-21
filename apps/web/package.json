@@ -1,0 +1,32 @@
+{
+    "name": "@repo/web",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev -p 3001",
+        "build": "next build",
+        "start": "next start -p 3001",
+        "typecheck": "tsc --noEmit",
+        "lint": "next lint"
+    },
+    "dependencies": {
+        "@repo/api": "workspace:*",
+        "@repo/types": "workspace:*",
+        "@xyflow/react": "^12.11.3",
+        "clsx": "^2.1.1",
+        "hono": "^4.13.3",
+        "next": "14.2.35",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "tailwind-merge": "^3.6.0"
+    },
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.4",
+        "autoprefixer": "^10.5.4",
+        "postcss": "^8.5.26",
+        "tailwindcss": "3.4.19",
+        "typescript": "^5.9.3"
+    }
+}

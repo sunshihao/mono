@@ -18,15 +18,19 @@ export interface CreateAppOptions {
     env?: NodeJS.ProcessEnv;
 }
 
+/** 核心路由 Schema 已累积进类型的 app（AppType/hono-client 依赖） */
+export type CoreApp = ReturnType<typeof mountRoutes>;
+
 export interface CreatedApp {
-    app: Hono<AppEnv>;
+    app: CoreApp;
     registry: PluginRegistry;
     dispose: () => Promise<void>;
 }
 
 /**
- * 组合根：注册表启动 → 中间件链 → 核心路由 → 插件路由。
+ * 组合根：注册表启动 → 中间件链 → 核心路由（链式累积 Schema 类型）→ 插件路由。
  * 中间件顺序（有依赖关系）: requestId → requestLogger → cors → services 注入 → onError。
+ * 插件路由以副作用挂载（运行时生效），不进入 AppType —— 插件端点属内部接口。
  */
 export async function createApp(
     plugins: Plugin[],
@@ -38,19 +42,20 @@ export async function createApp(
     });
     const { services } = await registry.start();
 
-    const app = new Hono<AppEnv>();
-    app.use("*", requestId());
-    app.use(
-        "*",
-        requestLogger(
-            options.logger ?? createLogger(process.env.LOG_LEVEL ?? "info"),
-        ),
-    );
-    app.use("*", corsMiddleware());
-    app.use("*", injectServices(services));
-    app.onError(errorHandler);
+    const base = new Hono<AppEnv>()
+        .use("*", requestId())
+        .use(
+            "*",
+            requestLogger(
+                options.logger ?? createLogger(process.env.LOG_LEVEL ?? "info"),
+            ),
+        )
+        .use("*", corsMiddleware())
+        .use("*", injectServices(services))
+        .onError(errorHandler);
 
-    mountRoutes(app, registry);
+    const app = mountRoutes(base, registry);
+
     // 插件路由统一挂到 "/"，路径前缀由插件自己的 basePath 决定
     for (const plugin of plugins) {
         const routes = plugin.routes?.(() => services);

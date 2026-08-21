@@ -19,6 +19,11 @@ export interface PluginInitContext {
     strict: boolean;
     /** 注册资源回收钩子，dispose 时按注册逆序执行 */
     onShutdown(fn: () => void | Promise<void>): void;
+    /**
+     * 读取已初始化的插件服务（闭包实时视图）。
+     * 按 deps 拓扑排序保证依赖插件先 init；依赖被禁用时为 null，插件可据此降级。
+     */
+    getServices(): Services;
 }
 
 export interface Plugin<S = unknown> {

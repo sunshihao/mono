@@ -53,6 +53,12 @@ export const QueryRequestSchema = z.object({
 });
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
+/** POST /v1/workflows/:id/run —— 以用户问题初始化 AgentState 并执行编译图 */
+export const RunRequestSchema = z.object({
+    query: z.string().min(1).max(4000),
+});
+export type RunRequest = z.infer<typeof RunRequestSchema>;
+
 export const QueryResponseSchema = z.object({
     query: z.string(),
     answer: z.string().nullable(),
