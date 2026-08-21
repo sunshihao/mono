@@ -120,6 +120,12 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.9.0
         version: 0.9.0(hono@4.13.3)(zod@3.25.76)
+      '@llamaindex/openai':
+        specifier: ^0.4.23
+        version: 0.4.23(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(zod@3.25.76)
+      '@qdrant/js-client-rest':
+        specifier: ^1.19.0
+        version: 1.19.0(typescript@5.9.3)
       '@repo/types':
         specifier: workspace:*
         version: link:../../packages/types
