@@ -5,7 +5,3 @@ coverage/
 .env.*.local
 *.log
 .DS_Store
-
-# 含远程服务凭据的本地文档，勿提交（如不需要忽略可删除本行）
-qdrant.md
-plan.md
