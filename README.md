@@ -32,11 +32,69 @@ mono/
 - **摄入三来源**：chokidar / `POST /webhooks/:source` / 定时轮询 hash 比对。
 - **端到端类型安全**：`@repo/types` zod schema → api 路由 → `AppType` → web `hc<AppType>`。
 
-## 核心设计
+## 架构说明（对 plan.md 的实现方式）
 
-- **Hono 是框架，集成为插件**：LangGraph.js / LlamaIndexTS / Qdrant / Langfuse(OTel) / drizzle+PG / ioredis 均为 `apps/api/src/plugins/<name>/` 下的插件，`PluginRegistry` 统一管理（topo 排序 → zod 配置校验 → 懒连接 init → 路由 → 优雅停机）。
-- **懒连接 + 优雅降级**：未配置的插件 `{ disabled, reason }` 降级（`/readyz` 可见）；`STRICT_INTEGRATIONS=true` 启动报错。503 = 集成未配置，502 = 上游调用失败。
-- 插件/路由/配置编写指南见 [apps/api/README.md](apps/api/README.md)；环境变量见各 app 的 `.env.example`（真实凭据在各 app `.env`，已 gitignore）。
+### 总体架构
+
+```
+                      ┌─────────────────────────────────────────────┐
+                      │  远程基础设施（凭据集中于根 .env JSON 总账）      │
+                      │  PostgreSQL :5433   Redis :6380   Qdrant :6333 │
+                      │  DashScope（千问 qwen-plus + text-embedding-v4）│
+                      └──────┬──────────────┬──────────────┬──────────┘
+                             │              │              │
+   ┌─────────────┐    ┌──────▼──────┐  ┌────▼───────┐  ┌───▼───────────┐
+   │ apps/web    │    │  apps/api   │  │ ingestion  │  │  Langfuse(可选) │
+   │ Next 14     │hc  │ Hono 网关    │  │ chokidar   │  │  OTel SDK     │
+   │ React Flow  ├───▶│ 插件体系     │  │ webhook    │  │  (SpanProcessor│
+   │ 画布/检索面板 │    │ ┌─────────┐ │  │ 轮询兜底    │  │   + 业务埋点)  │
+   └─────────────┘    │ │langgraph│ │  │   │ XADD   │  └───────────────┘
+        AppType       │ │llamaindex│ │  │   ▼       │
+   （端到端类型安全）   │ │qdrant   │ │  │ Redis Stream
+                      │ │drizzle  │ │  │   │ XREADGROUP（Consumer Group）
+                      │ │ioredis  │ │  │   ▼
+                      │ │observab.│ │  │ 切分(512/50)→嵌入→Qdrant upsert
+                      │ └─────────┘ │  └───────────────┘
+                      └─────────────┘
+                 packages/types —— zod schema 唯一事实源（全链路复用）
+```
+
+### 技术选型与理由
+
+| plan.md 蓝图 | 实际实现 | 为什么这样用 |
+|---|---|---|
+| Next.js 14 | **next@14.2.35 精确钉版** | 蓝图指定；React 18 严格配套（15/16 升 React 19 会破坏 @xyflow/react 兼容面） |
+| React Flow | **@xyflow/react v12** | 官方新包名（reactflow v11 已弃）；画布编辑与只读预览共用一套受控组件 |
+| shadcn/ui | 手工组件（button/card/input/badge）+ CSS 变量 token | 不依赖 CLI 的确定性；暗色可读性问题通过「React Flow 样式全部走 CSS 变量」根治 |
+| hono/client 类型安全 | **AppType = 链式累积 Schema 的 `typeof app`**，web 端 `hc<AppType>` | Hono 的 route() 返回 Schema 是 union（keyof 塌缩），mount 函数 cast 成交叉 + 泛型参数保留累积——详见 CLAUDE.md 的 AppType gotchas |
+| Hono API 网关 | **自研 PluginRegistry 插件体系**（非中间件堆叠） | 集成需要生命周期：topo 依赖排序、zod 配置校验、懒连接 init、优雅停机 dispose、就绪状态（/readyz）——中间件模型表达不了这些 |
+| LangGraph.js 编排 | **@langchain/langgraph v1.4**：可序列化 `WorkflowGraph` → 编译成执行图 | 图存 PG（jsonb），运行时编译执行；router 出边 `condition`=路由键的约定使图与引擎解耦 |
+| LlamaIndexTS 检索+索引 | **检索**用 @llamaindex/openai（嵌入/LLM）+ qdrant client 直连；**索引**自实现切分器（TS 版无 SentenceSplitter） | 弃用 @llamaindex/qdrant（0.1.33 与 core 0.6.22 版本错位）；直连 `client.query({using: 命名向量})` 精确对齐 ../RAG 的集合结构 |
+| Langfuse v5 OTel | **LangfuseSpanProcessor**（非 Exporter）+ 业务埋点（rag.pipeline/embed/search/synthesize、llm.chat、langgraph.node） | v5 API 已改；埋点用全局 no-op tracer（SDK 未启动也安全），配密钥即上报 |
+| drizzle + PG | workflows + workflow_versions 两表，图存 jsonb；PUT 改图自动 version+1 写历史 | 版本历史是编排可追溯的基础；懒连接（无 PG 时降级 503） |
+| ioredis | 三用途：Stream（XADD/XREADGROUP 队列）、PubSub（摄入通知）、缓存（检索响应 setex） | 一个客户端覆盖蓝图三种需求；未配置时各自降级 |
+| chokidar | v5（ESM-only、无 glob）+ 启动基线扫描 + sha256 内容去重 | 新版本 API；`ignoreInitial` 之外的存量文件用基线哈希，避免启动风暴 |
+| @repo/types | zod v3 唯一事实源（全仓钉 v3） | zod v4 与 v3 schema 混用运行时崩溃（踩过）；schema → zValidator → AppType → hc 一条链 |
+
+### 实现状态（五个阶段全部完成）
+
+1. **框架骨架**：插件体系（6 集成懒连接 + 优雅降级）、@repo/types、错误语义（503 未配置 / 502 上游失败）
+2. **检索与编排**：真实 RAG 管线（嵌入→Qdrant→qwen-plus）、WorkflowGraph 编译执行、ingestion/web 骨架
+3. **数据写入闭环**：文件→Stream→Consumer Group→切分→嵌入→upsert（幂等），检索命中新文档实测
+4. **工作流端到端**：画布编辑保存、版本历史、多轮 /run（MemorySaver checkpointer + messages 重放）
+5. **可观测与生产化**：OTel 业务埋点、检索缓存（实测 80 倍加速）、PubSub 通知、Notion/Confluence 适配器、Docker 部署化
+
+### 待改进（已知短板）
+
+| 项 | 现状 | 改进方向 |
+|---|---|---|
+| Langfuse 上报 | 埋点已就绪但**缺密钥未实测**；OTel SDK 2.x + api 1.9 组合下 span 父子链存疑 | 提供 LANGFUSE_* 后实测 trace 树完整性，必要时对齐 OTel 版本 |
+| SaaS 正文拉取 | Notion/Confluence 适配器只做「内容指针规范化」，不拉正文 | 各源连接器（API token）拉取 + 再嵌入 |
+| 索引增量 | 同 doc_hash 全量重写（先删后写）；缓存 TTL 有陈旧窗口 | 块级增量 diff；api 订阅 `ingestion:notifications` 主动失效缓存（频道已就绪） |
+| checkpointer | MemorySaver 进程内存，重启丢状态 | PG checkpointer（drizzle 已就绪） |
+| 画布编辑 | 无撤销/重做、无节点 config 表单；router 条件为字符串约定 | 命令栈、节点属性面板、条件表达式 DSL |
+| 认证/授权 | 骨架未做 | 网关层 auth 中间件（插件机制可挂载） |
+| 编排与部署 | 无 docker-compose 服务编排；无 CI/e2e 测试 | compose 一键起 + 集成测试管线 |
 
 ## 部署（Docker）
 
