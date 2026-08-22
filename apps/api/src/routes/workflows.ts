@@ -6,6 +6,7 @@ import {
     RunRequestSchema,
     WorkflowCreateInputSchema,
     WorkflowGraphSchema,
+    WorkflowUpdateInputSchema,
     type WorkflowDto,
 } from "@repo/types";
 import { z } from "zod";
@@ -105,6 +106,137 @@ export function mountWorkflows<S extends Schema>(app: Hono<AppEnv, S>) {
         })
         .post(
             "/:id/run",
+            // 双 zValidator 链的类型累积在 zod-validator 0.9 下失效：
+            // json 走 zValidator（进 AppType/hc 类型），param 在 handler 内 parse
+            zValidator("json", RunRequestSchema, (result, c) => {
+                if (!result.success) {
+                    return c.json(
+                        {
+                            error: "validation_error",
+                            issues: result.error.issues,
+                        },
+                        400,
+                    );
+                }
+            }),
+            async (c) => {
+                const dbService = c.var.services.db;
+                if (!dbService)
+                    return c.json({ error: "workflows_unavailable" }, 503);
+                const langgraph = c.var.services.langgraph;
+                if (!langgraph)
+                    return c.json({ error: "orchestration_unavailable" }, 503);
+                // IdParamSchema 是对象 schema，须包成 { id } 再 parse
+                const param = IdParamSchema.safeParse({
+                    id: c.req.param("id"),
+                });
+                if (!param.success) {
+                    return c.json(
+                        {
+                            error: "validation_error",
+                            issues: param.error.issues,
+                        },
+                        400,
+                    );
+                }
+                const [row] = await dbService.db
+                    .select()
+                    .from(workflows)
+                    .where(eq(workflows.id, param.data.id))
+                    .limit(1);
+                if (!row) return c.json({ error: "not_found" }, 404);
+                const graph = WorkflowGraphSchema.parse(row.graph);
+                const body = c.req.valid("json");
+                // 多轮：body.messages 作为历史重放，追加本轮 query
+                const state = await langgraph.run(
+                    graph,
+                    body.query,
+                    body.messages,
+                );
+                return c.json(state);
+            },
+        )
+        .put(
+            "/:id",
+            // json 走 zValidator（进 AppType/hc 类型），param 在 handler 内 parse（同 run 路由）
+            zValidator("json", WorkflowUpdateInputSchema, (result, c) => {
+                if (!result.success) {
+                    return c.json(
+                        {
+                            error: "validation_error",
+                            issues: result.error.issues,
+                        },
+                        400,
+                    );
+                }
+            }),
+            async (c) => {
+                const dbService = c.var.services.db;
+                if (!dbService)
+                    return c.json({ error: "workflows_unavailable" }, 503);
+                const body = c.req.valid("json");
+                if (!body.name && !body.graph) {
+                    return c.json(
+                        {
+                            error: "validation_error",
+                            issues: [
+                                { message: "至少提供 name 或 graph 之一" },
+                            ],
+                        },
+                        400,
+                    );
+                }
+                // IdParamSchema 是对象 schema，须包成 { id } 再 parse
+                const param = IdParamSchema.safeParse({
+                    id: c.req.param("id"),
+                });
+                if (!param.success) {
+                    return c.json(
+                        {
+                            error: "validation_error",
+                            issues: param.error.issues,
+                        },
+                        400,
+                    );
+                }
+                const id = param.data.id;
+                const [row] = await dbService.db
+                    .select()
+                    .from(workflows)
+                    .where(eq(workflows.id, id))
+                    .limit(1);
+                if (!row) return c.json({ error: "not_found" }, 404);
+
+                if (body.graph) {
+                    // 图更新：version+1 并写入版本历史
+                    const newVersion = row.version + 1;
+                    const [updated] = await dbService.db
+                        .update(workflows)
+                        .set({
+                            ...(body.name ? { name: body.name } : {}),
+                            graph: body.graph,
+                            version: newVersion,
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(workflows.id, id))
+                        .returning();
+                    await dbService.db.insert(workflowVersions).values({
+                        workflowId: id,
+                        version: newVersion,
+                        graph: body.graph,
+                    });
+                    return c.json(toDto(updated!));
+                }
+                const [updated] = await dbService.db
+                    .update(workflows)
+                    .set({ name: body.name!, updatedAt: new Date() })
+                    .where(eq(workflows.id, id))
+                    .returning();
+                return c.json(toDto(updated!));
+            },
+        )
+        .get(
+            "/:id/versions",
             zValidator<typeof IdParamSchema, "param", AppEnv, string>(
                 "param",
                 IdParamSchema,
@@ -113,31 +245,27 @@ export function mountWorkflows<S extends Schema>(app: Hono<AppEnv, S>) {
                 const dbService = c.var.services.db;
                 if (!dbService)
                     return c.json({ error: "workflows_unavailable" }, 503);
-                const langgraph = c.var.services.langgraph;
-                if (!langgraph)
-                    return c.json({ error: "orchestration_unavailable" }, 503);
-                // 双 zValidator 链的类型累积在 zod-validator 0.9 下失效，
-                // json 校验改在 handler 内手动 parse（契约与 hook 一致）
-                const body = RunRequestSchema.safeParse(await c.req.json());
-                if (!body.success) {
-                    return c.json(
-                        {
-                            error: "validation_error",
-                            issues: body.error.issues,
-                        },
-                        400,
-                    );
-                }
                 const { id } = c.req.valid("param");
-                const [row] = await dbService.db
+                const [workflow] = await dbService.db
                     .select()
                     .from(workflows)
                     .where(eq(workflows.id, id))
                     .limit(1);
-                if (!row) return c.json({ error: "not_found" }, 404);
-                const graph = WorkflowGraphSchema.parse(row.graph);
-                const state = await langgraph.run(graph, body.data.query);
-                return c.json(state);
+                if (!workflow) return c.json({ error: "not_found" }, 404);
+                const rows = await dbService.db
+                    .select()
+                    .from(workflowVersions)
+                    .where(eq(workflowVersions.workflowId, id))
+                    .orderBy(desc(workflowVersions.version));
+                return c.json({
+                    versions: rows.map((v) => ({
+                        id: v.id,
+                        workflowId: v.workflowId,
+                        version: v.version,
+                        graph: v.graph,
+                        createdAt: v.createdAt.toISOString(),
+                    })),
+                });
             },
         );
 

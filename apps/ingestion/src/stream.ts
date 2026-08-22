@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import type { Logger } from "pino";
 import {
+    INGESTION_NOTIFICATION_CHANNEL,
     INGESTION_STREAM,
     type IngestionEventEnvelope,
     type IngestionSource,
@@ -35,7 +36,10 @@ export function createStreamClient(
                 status: "pending",
             };
             if (!redis) {
-                logger.warn({ envelope }, "redis not configured, skipping XADD");
+                logger.warn(
+                    { envelope },
+                    "redis not configured, skipping XADD",
+                );
                 return envelope;
             }
             await redis.xadd(
@@ -44,6 +48,14 @@ export function createStreamClient(
                 "event",
                 JSON.stringify(envelope),
             );
+            // PubSub 通知：订阅 INGESTION_NOTIFICATION_CHANNEL 的服务
+            // （如 api 侧缓存失效/实时推送）可即时感知新摄入事件
+            await redis
+                .publish(
+                    INGESTION_NOTIFICATION_CHANNEL,
+                    JSON.stringify({ event: "ingested", envelope }),
+                )
+                .catch(() => undefined);
             logger.info({ envelope }, "ingestion event published");
             return envelope;
         },

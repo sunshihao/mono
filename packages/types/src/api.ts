@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentMessageSchema } from "./agent.js";
 import {
     WorkflowDefinitionSchema,
     WorkflowGraphSchema,
@@ -33,12 +34,36 @@ export const WorkflowCreateInputSchema = z.object({
 });
 export type WorkflowCreateInput = z.infer<typeof WorkflowCreateInputSchema>;
 
+/** PUT /v1/workflows/:id —— 至少更新一个字段；graph 更新时 version+1 并写版本历史 */
+export const WorkflowUpdateInputSchema = z.object({
+    name: z.string().min(1).max(200).optional(),
+    graph: WorkflowGraphSchema.optional(),
+});
+export type WorkflowUpdateInput = z.infer<typeof WorkflowUpdateInputSchema>;
+
 export type WorkflowDto = WorkflowDefinition;
 
 export const WorkflowListDtoSchema = z.object({
     workflows: z.array(WorkflowDefinitionSchema),
 });
 export type WorkflowListDto = z.infer<typeof WorkflowListDtoSchema>;
+
+/** 工作流版本历史条目 */
+export const WorkflowVersionDtoSchema = z.object({
+    id: z.string().uuid(),
+    workflowId: z.string().uuid(),
+    version: z.number().int().positive(),
+    graph: WorkflowGraphSchema,
+    createdAt: z.string().datetime(),
+});
+export type WorkflowVersionDto = z.infer<typeof WorkflowVersionDtoSchema>;
+
+export const WorkflowVersionListDtoSchema = z.object({
+    versions: z.array(WorkflowVersionDtoSchema),
+});
+export type WorkflowVersionListDto = z.infer<
+    typeof WorkflowVersionListDtoSchema
+>;
 
 export const SourceRefSchema = z.object({
     file_path: z.string(),
@@ -53,9 +78,13 @@ export const QueryRequestSchema = z.object({
 });
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
-/** POST /v1/workflows/:id/run —— 以用户问题初始化 AgentState 并执行编译图 */
+/**
+ * POST /v1/workflows/:id/run —— 以用户问题（+ 可选历史消息）初始化 AgentState 并执行编译图。
+ * messages 携带前几轮对话可实现多轮编排（与 checkpointer 的 thread 续跑互补）。
+ */
 export const RunRequestSchema = z.object({
     query: z.string().min(1).max(4000),
+    messages: z.array(AgentMessageSchema).max(50).optional(),
 });
 export type RunRequest = z.infer<typeof RunRequestSchema>;
 

@@ -11,6 +11,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { RetrievalPanel } from "@/components/retrieval-panel";
+import { NewWorkflowButton } from "@/components/new-workflow-button";
 
 interface WorkflowList {
     workflows: WorkflowDto[];
@@ -37,7 +38,9 @@ export default async function HomePage() {
     return (
         <main className="container mx-auto max-w-5xl space-y-8 p-6">
             <header className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight">RAG 工作台</h1>
+                <h1 className="text-3xl font-bold tracking-tight">
+                    RAG 工作台
+                </h1>
                 <p className="text-muted-foreground">
                     Hono 网关 · LangGraph 编排 · LlamaIndexTS + Qdrant 检索
                 </p>
@@ -53,11 +56,16 @@ export default async function HomePage() {
                             元数据未配置（以下为内置示例）
                         </Badge>
                     )}
+                    <div className="ml-auto">
+                        <NewWorkflowButton />
+                    </div>
                 </div>
                 {unavailable && (
                     <p className="text-sm text-muted-foreground">
-                        PostgreSQL 未配置（db 插件 disabled），工作流列表不可用；
-                        配置 <code>DATABASE_URL</code> 后将展示真实数据。示例图仍可在画布中浏览。
+                        PostgreSQL 未配置（db 插件
+                        disabled），工作流列表不可用； 配置{" "}
+                        <code>DATABASE_URL</code>{" "}
+                        后将展示真实数据。示例图仍可在画布中浏览。
                     </p>
                 )}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

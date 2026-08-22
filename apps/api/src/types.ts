@@ -52,10 +52,14 @@ export interface ObservabilityService {
 }
 
 export interface LangGraphService {
-    /** 把可序列化的 WorkflowGraph 编译为可执行图（校验失败抛 ConfigError） */
+    /** 把可序列化的 WorkflowGraph 编译为可执行图（校验失败抛 ConfigError；内置 MemorySaver checkpointer） */
     compile(graph: WorkflowGraph): unknown;
-    /** 编译并以用户问题初始化 AgentState 执行，返回最终 state */
-    run(graph: WorkflowGraph, query: string): Promise<AgentState>;
+    /** 编译并以用户问题（+ 可选历史消息）初始化 AgentState 执行，返回最终 state */
+    run(
+        graph: WorkflowGraph,
+        query: string,
+        history?: AgentMessage[],
+    ): Promise<AgentState>;
 }
 
 export interface LlamaIndexService {

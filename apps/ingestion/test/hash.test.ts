@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { pino } from "pino";
 import { computeFileHashes, sha256Hex } from "../src/hash.js";
 import { createStreamClient } from "../src/stream.js";
-import { INGESTION_STREAM } from "@repo/types";
+import { INGESTION_NOTIFICATION_CHANNEL, INGESTION_STREAM } from "@repo/types";
 
 describe("sha256Hex / computeFileHashes", () => {
     it("确定性：同内容同 hash，不同内容不同 hash，64 位 hex", async () => {
@@ -18,7 +18,11 @@ describe("sha256Hex / computeFileHashes", () => {
         const hashes = await computeFileHashes(dir);
         expect(hashes.size).toBe(3);
 
-        const [a, b, c] = [hashes.get(join(dir, "a.md")), hashes.get(join(dir, "b.md")), hashes.get(join(dir, "sub", "c.md"))];
+        const [a, b, c] = [
+            hashes.get(join(dir, "a.md")),
+            hashes.get(join(dir, "b.md")),
+            hashes.get(join(dir, "sub", "c.md")),
+        ];
         expect(a).toMatch(/^[0-9a-f]{64}$/);
         expect(a).toBe(c); // 同内容同 hash
         expect(a).not.toBe(b);
@@ -45,16 +49,24 @@ describe("createStreamClient", () => {
 
     it("redis 配置 → XADD 到 INGESTION_STREAM，事件为信封 JSON", async () => {
         const xadd = { calls: [] as unknown[][] };
+        const pubsub = { calls: [] as unknown[][] };
         const fakeRedis = {
             xadd: async (...args: unknown[]) => {
                 xadd.calls.push(args);
                 return "id";
+            },
+            publish: async (...args: unknown[]) => {
+                pubsub.calls.push(args);
+                return 1;
             },
         };
         const client = createStreamClient(fakeRedis as never, silent);
         await client.publish("webhook", "/n/page", "b".repeat(64));
 
         expect(xadd.calls).toHaveLength(1);
+        // PubSub 通知：XADD 后 PUBLISH 到通知频道
+        expect(pubsub.calls).toHaveLength(1);
+        expect(pubsub.calls[0]![0]).toBe(INGESTION_NOTIFICATION_CHANNEL);
         const [key, id, field, value] = xadd.calls[0]!;
         expect(key).toBe(INGESTION_STREAM);
         expect(id).toBe("*");

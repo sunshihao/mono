@@ -1,4 +1,10 @@
-import { END, START, StateGraph } from "@langchain/langgraph";
+import {
+    END,
+    START,
+    StateGraph,
+    type BaseCheckpointSaver,
+} from "@langchain/langgraph";
+import { trace } from "@opentelemetry/api";
 import type { AgentMessage, WorkflowGraph, WorkflowNode } from "@repo/types";
 import { ConfigError } from "../../lib/errors.js";
 import type { LlamaIndexService } from "../../types.js";
@@ -6,13 +12,19 @@ import { StateAnnotation } from "./state.js";
 
 type NodeUpdate = { messages?: AgentMessage[] };
 
+const nodeTracer = trace.getTracer("@repo/api/langgraph");
+
 /**
  * 把可序列化的 WorkflowGraph 编译为 LangGraph 可执行图。
  * 节点映射：start→入口、llm→LLM 对话节点、retrieve→检索节点、router→条件边、end→出口。
  * 约定：router 出边的 condition 即 path key（pathMap 另有 "default" 兜底）；
  * 运行时路由键取 state.route ?? state.currentChannel。
  */
-export function compileGraph(graph: WorkflowGraph, llm: LlamaIndexService) {
+export function compileGraph(
+    graph: WorkflowGraph,
+    llm: LlamaIndexService,
+    options: { checkpointer?: BaseCheckpointSaver } = {},
+) {
     validateGraph(graph);
 
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -67,7 +79,7 @@ export function compileGraph(graph: WorkflowGraph, llm: LlamaIndexService) {
         );
     }
 
-    return builder.compile();
+    return builder.compile({ checkpointer: options.checkpointer });
 }
 
 function validateGraph(graph: WorkflowGraph): void {
@@ -99,8 +111,37 @@ function byIds(graph: WorkflowGraph): Set<string> {
  * 节点动作。注意：LangGraph 中带 reducer 的 channel（messages）会把节点返回值
  * 作为 update 交给 reducer —— passthrough 节点必须返回空更新，返回完整 state
  * 会导致消息被 concat 两次。
+ * 每个节点执行打一个 span（node id/type/耗时），SDK 未启动时全局 no-op 安全。
  */
 async function nodeAction(
+    node: WorkflowNode,
+    llm: LlamaIndexService,
+    state: typeof StateAnnotation.State,
+): Promise<NodeUpdate> {
+    return nodeTracer.startActiveSpan(
+        "langgraph.node",
+        {
+            attributes: {
+                "workflow.node.id": node.id,
+                "workflow.node.type": node.type,
+                "workflow.node.label": node.label ?? node.type,
+                "workflow.messages": state.messages.length,
+            },
+        },
+        async (span) => {
+            try {
+                return await executeNode(node, llm, state);
+            } catch (err) {
+                span.recordException(err as Error);
+                throw err;
+            } finally {
+                span.end();
+            }
+        },
+    );
+}
+
+async function executeNode(
     node: WorkflowNode,
     llm: LlamaIndexService,
     state: typeof StateAnnotation.State,

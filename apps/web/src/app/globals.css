@@ -44,3 +44,47 @@
         --ring: 240 4.9% 83.9%;
     }
 }
+
+/*
+ * React Flow 画布主题适配：颜色一律走 shadcn CSS 变量（跟随明暗主题），
+ * 覆盖 @xyflow/react 自带样式（其默认白底黑字在暗色背景下不可读）。
+ */
+.react-flow {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+}
+
+.react-flow__node {
+    color: hsl(var(--foreground));
+}
+
+.react-flow__edge-text {
+    fill: hsl(var(--foreground));
+}
+
+.react-flow__edge-textbg {
+    fill: hsl(var(--card));
+}
+
+.react-flow__controls {
+    box-shadow: none;
+}
+
+.react-flow__controls button {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    fill: hsl(var(--foreground));
+}
+
+.react-flow__controls button:hover {
+    background: hsl(var(--accent));
+}
+
+.react-flow__background {
+    color: hsl(var(--border));
+}
+
+.react-flow__minimap {
+    background: hsl(var(--card));
+}

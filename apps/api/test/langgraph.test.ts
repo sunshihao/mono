@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QueryResponse, WorkflowGraph } from "@repo/types";
+import { MemorySaver } from "@langchain/langgraph";
 import { compileGraph } from "../src/plugins/langgraph/compiler.js";
 import type { LlamaIndexService } from "../src/types.js";
 
@@ -78,6 +79,31 @@ describe("compileGraph 编译", () => {
             route: "retrieval",
         });
         expect(state.messages[1]?.content).toContain("检索答案");
+    });
+
+    it("checkpointer：编译注入 MemorySaver 后 invoke 正常返回", async () => {
+        const compiled = compileGraph(makeGraph(), fakeLlm, {
+            checkpointer: new MemorySaver(),
+        });
+        const state = await compiled.invoke(
+            { messages: [{ role: "user", content: "你好" }] },
+            { configurable: { thread_id: "test-thread" } },
+        );
+        expect(state.messages).toHaveLength(1);
+    });
+
+    it("多轮历史：初始 messages 携带前几轮时，检索节点基于最新用户消息", async () => {
+        const compiled = compileGraph(routerGraph, fakeLlm);
+        const state = await compiled.invoke({
+            messages: [
+                { role: "user", content: "第一轮问题" },
+                { role: "assistant", content: "第一轮回答" },
+                { role: "user", content: "第二轮问题" },
+            ],
+        });
+        // retrieve 节点取最后一条 user 消息（第二轮）生成回答
+        expect(state.messages).toHaveLength(4);
+        expect(state.messages[3]?.content).toContain("检索答案");
     });
 });
 
