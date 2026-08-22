@@ -98,6 +98,27 @@ export const QueryResponseSchema = z.object({
 });
 export type QueryResponse = z.infer<typeof QueryResponseSchema>;
 
+/**
+ * 纯检索响应（外部 LLM / MCP 的上下文供给）：不合成答案，
+ * 只返回命中的上下文块与来源，由调用方自己的模型消费。
+ */
+export const SearchResultSchema = z.object({
+    text: z.string(),
+    file_path: z.string(),
+    file_name: z.string(),
+    doc_hash: z.string(),
+    score: z.number(),
+});
+export type SearchResult = z.infer<typeof SearchResultSchema>;
+
+export const SearchResponseSchema = z.object({
+    query: z.string(),
+    results: z.array(SearchResultSchema),
+    provider: z.enum(["stub", "llamaindex"]),
+    disabled: z.boolean().default(false),
+});
+export type SearchResponse = z.infer<typeof SearchResponseSchema>;
+
 export const ErrorDtoSchema = z.object({
     error: z.string(),
     issues: z.array(z.unknown()).optional(),

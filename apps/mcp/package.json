@@ -1,0 +1,24 @@
+{
+    "name": "@repo/mcp",
+    "version": "0.1.0",
+    "private": false,
+    "type": "module",
+    "scripts": {
+        "dev": "node --import tsx --watch src/index.ts",
+        "build": "tsc -p tsconfig.build.json",
+        "start": "node dist/index.js",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.30.0",
+        "@repo/types": "workspace:*",
+        "zod": "^4.4.3"
+    },
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "tsx": "^4.23.12",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.11"
+    }
+}

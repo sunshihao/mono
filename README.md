@@ -31,6 +31,7 @@ mono/
 - **工作流编排（端到端）**：web 画布编辑（增删节点/连线/条件边）→ 保存（PUT，改图自动升版本）→ 版本历史浏览 → `POST /v1/workflows/:id/run` 多轮执行（messages 历史重放 + MemorySaver checkpointer）。
 - **摄入三来源**：chokidar / `POST /webhooks/:source` / 定时轮询 hash 比对。
 - **端到端类型安全**：`@repo/types` zod schema → api 路由 → `AppType` → web `hc<AppType>`。
+- **外部数据供给**：知识库作为数据源对 **其他 LLM / Claude Code** 开放——纯检索端点（`/v1/retrieval/search`）、MCP Server（`apps/mcp`，Claude Code 一条命令接入）、Qdrant/PG 直连，详见 [DATA_ACCESS.md](DATA_ACCESS.md)。
 
 ## 架构说明（对 plan.md 的实现方式）
 

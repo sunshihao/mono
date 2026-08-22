@@ -10,6 +10,7 @@ import type {
     AgentState,
     QueryRequest,
     QueryResponse,
+    SearchResponse,
     WorkflowGraph,
 } from "@repo/types";
 import type * as schema from "./db/schema.js";
@@ -65,6 +66,8 @@ export interface LangGraphService {
 export interface LlamaIndexService {
     /** 完整 RAG 管线：嵌入 → Qdrant 检索 → LLM 合成 */
     query(input: QueryRequest): Promise<QueryResponse>;
+    /** 纯检索（不合成）：外部 LLM / MCP 的上下文供给 */
+    search(input: QueryRequest): Promise<SearchResponse>;
     /** 纯 LLM 对话（langgraph 的 llm 节点用），返回文本 */
     chat(messages: AgentMessage[]): Promise<string>;
 }

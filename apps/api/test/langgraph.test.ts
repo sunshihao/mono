@@ -13,6 +13,12 @@ const fakeLlm: LlamaIndexService = {
         provider: "llamaindex",
         disabled: false,
     }),
+    search: async (input) => ({
+        query: input.query,
+        results: [],
+        provider: "llamaindex",
+        disabled: false,
+    }),
 };
 
 function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph {

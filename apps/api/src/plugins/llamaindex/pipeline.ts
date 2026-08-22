@@ -1,6 +1,11 @@
 import { HTTPException } from "hono/http-exception";
 import { SpanStatusCode, trace, type Span } from "@opentelemetry/api";
-import type { AgentMessage, QueryRequest, QueryResponse } from "@repo/types";
+import type {
+    AgentMessage,
+    QueryRequest,
+    QueryResponse,
+    SearchResponse,
+} from "@repo/types";
 
 /** 检索命中的点（与 Qdrant ScoredPoint 兼容的最小子集） */
 export interface RetrievedPoint {
@@ -135,6 +140,71 @@ export async function runRagPipeline(
                 span.setAttribute("rag.sources", response.sources.length);
                 span.setStatus({ code: SpanStatusCode.OK });
                 return response;
+            } catch (err) {
+                span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: err instanceof Error ? err.message : String(err),
+                });
+                span.recordException(err as Error);
+                if (err instanceof HTTPException) throw err;
+                throw new HTTPException(502, {
+                    message: `retrieval_upstream_failed: ${err instanceof Error ? err.message : String(err)}`,
+                });
+            } finally {
+                span.end();
+            }
+        },
+    );
+}
+
+/**
+ * 纯检索管线（外部 LLM / MCP 的上下文供给）：嵌入 → Qdrant 检索，
+ * 不做 LLM 合成——由调用方自己的模型消费上下文块。
+ * 上游失败 → HTTPException 502（与完整管线同语义）。
+ */
+export async function runRagSearch(
+    deps: PipelineDeps,
+    input: QueryRequest,
+): Promise<SearchResponse> {
+    return tracer.startActiveSpan(
+        "rag.search_only",
+        {
+            attributes: {
+                "rag.query": input.query.slice(0, 500),
+                "rag.top_k": input.topK,
+            },
+        },
+        async (span: Span) => {
+            try {
+                const vector = await deps.embed(input.query);
+                const points = await deps.queryVectors(vector, input.topK);
+                span.setAttribute("rag.hits", points.length);
+                const results = points.map((p) => ({
+                    text:
+                        typeof p.payload?.text === "string"
+                            ? p.payload.text
+                            : "",
+                    file_path:
+                        typeof p.payload?.file_path === "string"
+                            ? p.payload.file_path
+                            : "",
+                    file_name:
+                        typeof p.payload?.file_name === "string"
+                            ? p.payload.file_name
+                            : "",
+                    doc_hash:
+                        typeof p.payload?.doc_hash === "string"
+                            ? p.payload.doc_hash
+                            : "",
+                    score: p.score,
+                }));
+                span.setStatus({ code: SpanStatusCode.OK });
+                return {
+                    query: input.query,
+                    results,
+                    provider: "llamaindex" as const,
+                    disabled: false,
+                };
             } catch (err) {
                 span.setStatus({
                     code: SpanStatusCode.ERROR,

@@ -5,15 +5,21 @@ import { trace } from "@opentelemetry/api";
 import { z } from "zod";
 import {
     QueryResponseSchema,
+    SearchResponseSchema,
     RAG_COLLECTION,
     RAG_VECTOR_NAME,
     type AgentMessage,
     type QueryRequest,
     type QueryResponse,
+    type SearchResponse,
 } from "@repo/types";
 import type { LlamaIndexService } from "../../types.js";
 import type { Plugin } from "../types.js";
-import { runRagPipeline, type RetrievedPoint } from "./pipeline.js";
+import {
+    runRagPipeline,
+    runRagSearch,
+    type RetrievedPoint,
+} from "./pipeline.js";
 import { extractText } from "./text.js";
 
 const llmTracer = trace.getTracer("@repo/api/llm");
@@ -144,32 +150,83 @@ export const llamaindexPlugin: Plugin<LlamaIndexService> = {
                 input,
             );
 
-        return {
-            chat,
-            query: async (input): Promise<QueryResponse> => {
-                if (!cache || RAG_CACHE_TTL === 0) return pipeline(input);
-                const key = cacheKey(input.query, input.topK);
-                const cached = await cache.client.get(key);
-                if (cached) {
-                    const parsed = QueryResponseSchema.safeParse(
-                        JSON.parse(cached),
-                    );
-                    if (parsed.success) {
+        /** 纯检索管线（不合成）：与 query 共用 deps */
+        const searchPipeline = (input: QueryRequest): Promise<SearchResponse> =>
+            runRagSearch(
+                {
+                    embed: (text) => embedModel.getTextEmbedding(text),
+                    queryVectors: async (
+                        vector,
+                        topK,
+                    ): Promise<RetrievedPoint[]> => {
+                        const result = await qdrant.client.query(
+                            RAG_COLLECTION,
+                            {
+                                query: vector,
+                                using: RAG_VECTOR_NAME,
+                                limit: topK,
+                                with_payload: true,
+                            },
+                        );
+                        return result.points.map((p) => ({
+                            score: p.score,
+                            payload: p.payload as
+                                Record<string, unknown> | null | undefined,
+                        }));
+                    },
+                    chat,
+                },
+                input,
+            );
+
+        /** 带缓存的检索包装（cache 为 null 或 TTL=0 时直通） */
+        const withCache = async <T>(
+            prefix: string,
+            key: string,
+            parse: (raw: string) => { success: boolean; data?: T },
+            run: () => Promise<T>,
+        ): Promise<T> => {
+            if (!cache || RAG_CACHE_TTL === 0) return run();
+            const fullKey = `${prefix}${key}`;
+            const cached = await cache.client.get(fullKey);
+            if (cached) {
+                try {
+                    const parsed = parse(cached);
+                    if (parsed.success && parsed.data !== undefined) {
                         llmTracer
                             .startSpan("rag.cache")
                             .setAttribute("rag.cache.hit", true)
                             .end();
                         return parsed.data;
                     }
+                } catch {
                     // 缓存内容损坏：删除并直通
-                    await cache.client.del(key);
                 }
-                const result = await pipeline(input);
-                await cache.client
-                    .setex(key, RAG_CACHE_TTL, JSON.stringify(result))
-                    .catch(() => undefined); // 缓存失败不影响响应
-                return result;
-            },
+                await cache.client.del(fullKey);
+            }
+            const result = await run();
+            await cache.client
+                .setex(fullKey, RAG_CACHE_TTL, JSON.stringify(result))
+                .catch(() => undefined); // 缓存失败不影响响应
+            return result;
+        };
+
+        return {
+            chat,
+            query: (input) =>
+                withCache(
+                    "rag:cache:",
+                    cacheKey(input.query, input.topK),
+                    (raw) => QueryResponseSchema.safeParse(JSON.parse(raw)),
+                    () => pipeline(input),
+                ),
+            search: (input) =>
+                withCache(
+                    "rag:search:",
+                    cacheKey(input.query, input.topK),
+                    (raw) => SearchResponseSchema.safeParse(JSON.parse(raw)),
+                    () => searchPipeline(input),
+                ),
         };
     },
 };
