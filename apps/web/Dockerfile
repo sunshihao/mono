@@ -6,6 +6,9 @@ RUN corepack enable
 WORKDIR /repo
 
 FROM base AS build
+# NEXT_PUBLIC_API_URL 为构建期内联（Next 约定），docker build 时经 --build-arg 注入
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @repo/types build \

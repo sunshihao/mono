@@ -1,6 +1,6 @@
 # mono — AI 知识库 monorepo（样板框架）
 
-技术蓝图见 [plan.md](plan.md)。当前进度：**阶段四 —— 编排与工作流端到端已完成**（版本历史 + 画布编辑 + 多轮执行全链路实测）。
+技术蓝图见 [plan.md](plan.md)。当前进度：**五个阶段全部完成**（框架/检索编排/数据闭环/工作流端到端/可观测与生产化，全链路实测）。
 
 ## 结构
 
@@ -48,9 +48,79 @@ docker build -f apps/ingestion/Dockerfile -t repo-ingestion .
 docker build -f apps/web/Dockerfile       -t repo-web       .
 ```
 
-运行时配置：
+### 各容器 .env 内容（docker 化后必须提供）
 
-- **环境变量**：容器不内置凭据，经编排注入（docker run `-e` / k8s Secret）。api 需要 `QDRANT_*`、`OPENAI_*`（DashScope）、`DATABASE_URL`（自签证书加 `sslmode=no-verify`）、`REDIS_URL`；ingestion 需要 `INGEST_DIR`、`REDIS_URL`、`QDRANT_*`、`OPENAI_*`；web 用 `NEXT_PUBLIC_API_URL`（建议构建期注入，Next 会内联）。
+镜像不含任何凭据。两种注入方式二选一：**① `docker run --env-file <宿主机 .env>`**；**② 挂载到容器内 `/app/.env`**（api/ingestion 的启动命令已带 `--env-file-if-exists=.env` 自动加载）。凭据以根 `.env`（JSON 总账）为唯一事实源，按下方键名拆分到各服务：
+
+**api（端口 3000，挂载卷建议：无，无状态）**
+
+```dotenv
+# ---- 服务 ----
+PORT=3000
+LOG_LEVEL=info
+STRICT_INTEGRATIONS=false        # true = 未配置的集成启动报错
+
+# ---- 远程资源（取自根 .env 总账）----
+DATABASE_URL=postgresql://myappuser:****@<host>:5433/myappdb?sslmode=no-verify
+REDIS_URL=redis://:****@<host>:6380/0
+QDRANT_URL=http://<host>:6333
+QDRANT_API_KEY=<token>
+
+# ---- LLM / 嵌入（DashScope OpenAI 兼容）----
+OPENAI_API_KEY=<sk-...>
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+RAG_CACHE_TTL=300                # 检索响应缓存秒数，0 禁用（需 REDIS_URL）
+
+# ---- 可观测（可选；配齐才启动 OTel SDK 上报 Langfuse）----
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+**ingestion（端口 3002，挂载卷建议：被监听目录 `-v /data/docs:/data/docs`）**
+
+```dotenv
+# ---- 服务 ----
+PORT=3002
+LOG_LEVEL=info
+INGEST_DIR=/data/docs              # 容器内被监听目录（宿主目录经 -v 挂载）
+POLL_INTERVAL_MS=60000
+
+# ---- 远程资源 ----
+REDIS_URL=redis://:****@<host>:6380/0
+QDRANT_URL=http://<host>:6333
+QDRANT_API_KEY=<token>
+
+# ---- LLM / 嵌入 ----
+OPENAI_API_KEY=<sk-...>
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+**web（端口 3001）**：无需运行时 `.env`——`NEXT_PUBLIC_API_URL` 是**构建期内联**的，须在 `docker build` 时注入：
+
+```bash
+docker build --build-arg NEXT_PUBLIC_API_URL=http://<api-host>:3000 \
+  -f apps/web/Dockerfile -t repo-web .
+```
+
+（或改用 `-e NEXT_PUBLIC_API_URL=...` 在 `docker run` 时传入，效果相同。）
+
+### 运行示例
+
+```bash
+# 方式一：宿主机 .env 文件注入（推荐，凭据不进镜像）
+docker run -d --name repo-api --env-file ./deploy/api.env -p 3000:3000 repo-api
+
+# 方式二：容器内挂载 .env（api/ingestion 启动命令会自动加载）
+docker run -d --name repo-api -v ./deploy/api.env:/app/.env -p 3000:3000 repo-api
+
+# ingestion 额外挂载被监听目录
+docker run -d --name repo-ingestion --env-file ./deploy/ingestion.env \
+  -v /data/docs:/data/docs -p 3002:3002 repo-ingestion
+```
+
+### 运维对接
+
 - **健康检查**：`GET /healthz`（存活）与 `GET /readyz`（就绪：enabled 插件全健康 200，否则 503）直接对接 k8s liveness/readiness probe。
 - **优雅停机**：api/ingestion 均监听 SIGTERM 逆序回收插件资源（redis/pool/OTel flush），k8s `terminationGracePeriodSeconds` 留 10s+ 即可。
 - **非 Edge 部署**：api/ingestion 是长驻 Node 进程（@hono/node-server），不可部署到边缘运行时（Vercel Edge/CF Workers）；web 是标准 Next.js。

@@ -17,4 +17,5 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out/ingestion .
 EXPOSE 3002
-CMD ["node", "dist/index.js"]
+# 环境变量经 --env-file 注入或挂载 /app/.env（内容清单见根 README 部署节）
+CMD ["node", "--env-file-if-exists=.env", "dist/index.js"]
