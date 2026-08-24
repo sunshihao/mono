@@ -88,6 +88,51 @@ mono/
 4. **工作流端到端**：画布编辑保存、版本历史、多轮 /run（MemorySaver checkpointer + messages 重放）
 5. **可观测与生产化**：OTel 业务埋点、检索缓存（实测 80 倍加速）、PubSub 通知、Notion/Confluence 适配器、Docker 部署化
 
+**附加能力：多仓库 → 多向量库增量同步**（`apps/data`，五阶段蓝图之外的扩展，详见下节）。
+
+## 多仓库 → 多向量库增量同步（apps/data）
+
+`apps/data`（`@repo/data`，端口 3003）把**任意数量的 GitHub 仓库**增量同步进 Qdrant：每个仓库对应一个独立 collection（一对一），仓库 push 时**只同步本次提交产生的变化文件**（新增/修改/删除/重命名），不做全量重建。与 `ingestion`（文件目录 → `knowledgeOfAI`）是两条互补的数据通道。
+
+```
+GitHub push ─▶ [Webhook :3003] ─▶ Redis Stream data-sync:<repo> ─▶ [Sync Worker]
+     ▲                            （每仓库一条流，SET NX 租约独占消费）
+     │                                │
+[Reconcile 对账] ◀── 每 5 分钟比对远端头与 state，落后则补投递（防 webhook 丢失）
+                                      │
+     Qdrant per-repo collection ◀────┘
+     （chinese-buy-us-stock-guide-main 等）
+          ▲ git fetch + diff(from=state.sha|空树, to=after)
+          │ A/M/D/R 分类 → glob 过滤 → 切块(auto/markdown/code/fixed)
+          │ → DashScope 批量嵌入（batch≤10）→ upsert（512KB 分片）
+          │ → 全部成功后写 .sync-state/<repo>.state.json（事务化推进）
+          └ 幂等点 ID：sha256(repo:file_path:chunk_index)；M 差集删除防僵尸向量；
+            content_hash 不变跳过；R 内容未变向量搬运免重嵌
+```
+
+核心保证：
+
+- **配置驱动**：仓库 ↔ collection 映射、glob 过滤、切块策略全部集中在 `apps/data/sync.config.yaml`（env:VAR 注入），新仓库接入零代码改动
+- **状态外置 + 幂等写入**：同步进度存 `.sync-state/`，向量点 ID 由内容位置确定性生成——任何环节重放都不产生脏数据；worker 侧 isAncestor 收敛检查跳过乱序/重放的旧事件
+- **事务化推进**：向量库全部写入成功才更新 state，失败停留在旧 sha 整段可重跑；单文件/单批嵌入与写库带指数退避重试，超上限进仓库 DLQ 流（`data-sync:dlq:<repo>`）
+- **仓库级隔离 + 水平扩展**：每仓库一条 Redis Stream 保证严格 FIFO，租约机制让 worker 可水平扩容、崩溃自动接管（XAUTOCLAIM）
+
+**接入与运维**：
+
+```bash
+# 新仓库三步：submodule 拉取 → sync.config.yaml 登记 → 全量初始化
+git submodule add <repo-url> apps/data/repos/<name>
+pnpm --filter @repo/data cli backfill <name>      # 先加 --dry-run 预览
+
+# 运维命令（sync/backfill/cleanup/status/config-check/reconcile/worker/webhook/serve）
+pnpm --filter @repo/data cli status               # 各仓库同步状态与漂移
+pnpm dev:data                                     # 一体化启动（webhook+worker+对账）
+```
+
+**检索接线**：同步进 per-repo collection 的数据经 api 的 `RAG_SEARCH_COLLECTIONS` 清单被 RAG 管线检索（见「核心能力」）：`knowledgeOfAI@text-embedding-v4,chinese-buy-us-stock-guide-main`——带 `@` 的是命名向量集合，不带 `@` 的是 data 系统的未命名向量集合；单集合未创建仅告警跳过。已接入仓库：`chinese-buy-us-stock-guide`（美股指南，13 文档 45 块，已实测检索命中）。详见 [apps/data/README.md](apps/data/README.md)。
+
+> 注：apps/data 暂未 Docker 化（`pnpm dev:data` 直跑长驻 Node 进程）；`repos/` 与 `.sync-state/` 已 gitignore，凭据复用 `.env`（QDRANT_URL / REDIS_URL / OPENAI_API_KEY）。
+
 ### 待改进（已知短板）
 
 | 项 | 现状 | 改进方向 |
