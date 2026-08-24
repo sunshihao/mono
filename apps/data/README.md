@@ -57,7 +57,7 @@ embedding:
   provider: dashscope         # dashscope | openai（OpenAI 兼容端点）
   model: text-embedding-v4
   dimensions: 1024
-  batch_size: 16              # 嵌入批大小（限流时自动指数退避重试）
+  batch_size: 10              # 嵌入批大小；DashScope 单次上限 10（限流时自动指数退避重试）
   api_key: env:OPENAI_API_KEY
   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
 repositories:
@@ -160,8 +160,19 @@ pnpm --filter @repo/data dev        # 一体化 serve（3003）
 ## 测试
 
 ```bash
-pnpm --filter @repo/data test    # 76 例全离线：git fixture 仓库（file:// 远端）、fake store/embed/redis
+pnpm --filter @repo/data test    # 80 例全离线：git fixture 仓库（file:// 远端）、fake store/embed/redis
 ```
+
+## 接入 RAG 平台检索（消费侧）
+
+数据系统只负责生产侧（仓库 → 向量库）。要让 `apps/api` 的 RAG 管线检索到本系统的集合，在 api 的 `.env` 声明集合清单即可（api 的 llamaindex 插件 v0.4+ 支持多集合检索）：
+
+```bash
+# apps/api/.env
+RAG_SEARCH_COLLECTIONS=knowledgeOfAI@text-embedding-v4,chinese-buy-us-stock-guide-main
+```
+
+语法 `name[@vectorName]` 逗号分隔：带 `@` 的是命名向量集合（`knowledgeOfAI` 原型集合），不带 `@` 的是本系统写入的 per-repo 集合（未命名单向量）。查询时逐集合检索、按 score 合并取 topK；某集合尚未创建（未 backfill）只告警跳过，不影响其余集合。新增仓库接入后在此追加一个集合名即可被检索到。
 
 覆盖：配置解析与 env 注入、三种切块策略、A/M/D/R diff 解析与空树 backfill、M 差集删除、R 向量搬运、content_hash 跳过、sync 事务化（失败不推进 state）、stale 收敛、webhook 签名/分支/去重、worker 消息决策（去重/DLQ/退避重投）、租约。
 

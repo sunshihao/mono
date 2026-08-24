@@ -26,13 +26,17 @@ export interface EmbedderConfig {
 }
 
 const DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+/** DashScope text-embedding-v4 单次请求批量上限（超限服务端报 InvalidParameter） */
+const DASHSCOPE_MAX_BATCH = 10;
 
 export function createEmbedder(
     config: EmbedderConfig,
     deps: { model?: EmbedderLike } = {},
 ): Embedder {
     if (!config.apiKey) {
-        throw new Error("embedding api_key not configured (env ref resolved empty)");
+        throw new Error(
+            "embedding api_key not configured (env ref resolved empty)",
+        );
     }
     const model: EmbedderLike =
         deps.model ??
@@ -46,12 +50,17 @@ export function createEmbedder(
                   ? { baseURL: config.baseUrl }
                   : {}),
         });
+    // 钳制到 provider 上限，避免配置笔误让整批请求被服务端拒绝
+    const batchSize =
+        config.provider === "dashscope"
+            ? Math.min(config.batchSize, DASHSCOPE_MAX_BATCH)
+            : config.batchSize;
 
     return {
         async embedTexts(texts) {
             const vectors: number[][] = [];
-            for (let i = 0; i < texts.length; i += config.batchSize) {
-                const batch = texts.slice(i, i + config.batchSize);
+            for (let i = 0; i < texts.length; i += batchSize) {
+                const batch = texts.slice(i, i + batchSize);
                 const result = await withRetry(
                     () => model.getTextEmbeddings(batch),
                     { retries: 4, baseDelayMs: 1000, maxDelayMs: 30000 },

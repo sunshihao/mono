@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { withRetry } from "./lib/retry.js";
 
 /**
  * git 操作封装（设计 §6：diff 驱动增量）。
@@ -29,11 +30,19 @@ export interface GitOps {
     /** 远端分支头 sha（reconcile / 无 target 时的默认目标） */
     lsRemote(repoPath: string, remote: string, branch: string): Promise<string>;
     /** git diff --name-status -z 解析出文件变更集 */
-    diffNameStatus(repoPath: string, from: string, to: string): Promise<FileChange[]>;
+    diffNameStatus(
+        repoPath: string,
+        from: string,
+        to: string,
+    ): Promise<FileChange[]>;
     /** 指定 commit 下文件内容（原始字节，调用方做二进制检测） */
     showFile(repoPath: string, sha: string, filePath: string): Promise<Buffer>;
     /** maybeAncestor 是否是 sha 的祖先（退出码语义） */
-    isAncestor(repoPath: string, maybeAncestor: string, sha: string): Promise<boolean>;
+    isAncestor(
+        repoPath: string,
+        maybeAncestor: string,
+        sha: string,
+    ): Promise<boolean>;
 }
 
 interface GitExecOptions {
@@ -61,12 +70,16 @@ async function git(
 }
 
 const SHA40 = /^[0-9a-f]{40}$/;
+/** 远端操作瞬时网络故障重试（GitHub 偶发挂起/断连） */
+const REMOTE_RETRY = { retries: 2, baseDelayMs: 1000, maxDelayMs: 5000 };
 
 export function createGitOps(): GitOps {
     return {
         async ensureRepo(repoPath) {
             try {
-                await git(repoPath, ["rev-parse", "--git-dir"], { timeout: 10_000 });
+                await git(repoPath, ["rev-parse", "--git-dir"], {
+                    timeout: 10_000,
+                });
             } catch {
                 throw new Error(
                     `local repo missing or not a git repo: ${repoPath}`,
@@ -75,17 +88,25 @@ export function createGitOps(): GitOps {
         },
 
         async fetch(repoPath, remote, branch) {
-            await git(repoPath, ["fetch", "--quiet", remote, branch], {
-                timeout: 300_000,
-            });
+            await withRetry(
+                () =>
+                    git(repoPath, ["fetch", "--quiet", remote, branch], {
+                        timeout: 300_000,
+                    }),
+                REMOTE_RETRY,
+            );
         },
 
         async lsRemote(repoPath, remote, branch) {
-            const out = (await git(repoPath, [
-                "ls-remote",
-                remote,
-                `refs/heads/${branch}`,
-            ], { timeout: 60_000 })) as string;
+            const out = (await withRetry(
+                () =>
+                    git(
+                        repoPath,
+                        ["ls-remote", remote, `refs/heads/${branch}`],
+                        { timeout: 60_000 },
+                    ),
+                REMOTE_RETRY,
+            )) as string;
             const sha = out.split(/\s+/)[0];
             if (!sha || !SHA40.test(sha)) {
                 throw new Error(
@@ -136,19 +157,22 @@ export function createGitOps(): GitOps {
         },
 
         async showFile(repoPath, sha, filePath) {
-            return (await git(repoPath, ["cat-file", "blob", `${sha}:${filePath}`], {
-                encoding: "buffer",
-            })) as Buffer;
+            return (await git(
+                repoPath,
+                ["cat-file", "blob", `${sha}:${filePath}`],
+                {
+                    encoding: "buffer",
+                },
+            )) as Buffer;
         },
 
         async isAncestor(repoPath, maybeAncestor, sha) {
             try {
-                await git(repoPath, [
-                    "merge-base",
-                    "--is-ancestor",
-                    maybeAncestor,
-                    sha,
-                ], { timeout: 60_000 });
+                await git(
+                    repoPath,
+                    ["merge-base", "--is-ancestor", maybeAncestor, sha],
+                    { timeout: 60_000 },
+                );
                 return true;
             } catch {
                 return false; // 非祖先 / 对象缺失 → false

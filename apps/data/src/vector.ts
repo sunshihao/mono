@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { QdrantClient } from "@qdrant/js-client-rest";
+import { withRetry } from "./lib/retry.js";
 
 /**
  * Qdrant 向量库封装（设计 §7）。
@@ -72,6 +73,16 @@ export interface VectorStore {
     dropCollection(collection: string): Promise<void>;
 }
 
+/** 单次 upsert 请求体上限（~512KB）：远程 Qdrant 前有网关时常见 1MB body 限制 */
+const MAX_UPSERT_BYTES = 512 * 1024;
+/** 写操作瞬时网络故障重试（设计 §10：向量库写入失败重试） */
+const WRITE_RETRY = { retries: 3, baseDelayMs: 1000, maxDelayMs: 10000 };
+
+function estimatePointBytes(p: VectorPoint): number {
+    // 向量 4 字节/维 + payload JSON + id 与结构开销余量
+    return p.vector.length * 4 + JSON.stringify(p.payload).length + 96;
+}
+
 export function createVectorStore(
     qdrantUrl: string,
     apiKey: string | undefined,
@@ -102,19 +113,44 @@ export function createVectorStore(
 
         async upsert(collection, points) {
             if (points.length === 0) return;
-            await client.upsert(collection, {
-                points: points.map((p) => ({
-                    id: p.id,
-                    vector: p.vector,
-                    payload: p.payload,
-                })),
-                wait: true,
-            });
+            // 按估算字节数分片，避免单请求过大被网关掐断
+            const batches: VectorPoint[][] = [];
+            let current: VectorPoint[] = [];
+            let bytes = 0;
+            for (const p of points) {
+                const size = estimatePointBytes(p);
+                if (current.length > 0 && bytes + size > MAX_UPSERT_BYTES) {
+                    batches.push(current);
+                    current = [];
+                    bytes = 0;
+                }
+                current.push(p);
+                bytes += size;
+            }
+            if (current.length > 0) batches.push(current);
+
+            for (const batch of batches) {
+                await withRetry(
+                    () =>
+                        client.upsert(collection, {
+                            points: batch.map((p) => ({
+                                id: p.id,
+                                vector: p.vector,
+                                payload: p.payload,
+                            })),
+                            wait: true,
+                        }),
+                    WRITE_RETRY,
+                );
+            }
         },
 
         async deleteByIds(collection, ids) {
             if (ids.length === 0) return;
-            await client.delete(collection, { points: ids, wait: true });
+            await withRetry(
+                () => client.delete(collection, { points: ids, wait: true }),
+                WRITE_RETRY,
+            );
         },
 
         async deleteByRepo(collection, repo) {
