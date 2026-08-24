@@ -1,0 +1,32 @@
+{
+    "name": "@repo/data",
+    "version": "0.1.0",
+    "private": false,
+    "type": "module",
+    "scripts": {
+        "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
+        "build": "tsc -p tsconfig.build.json",
+        "start": "node --env-file-if-exists=.env dist/index.js",
+        "cli": "node --env-file-if-exists=.env --import tsx src/cli.ts",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@hono/node-server": "^2.1.1",
+        "@llamaindex/openai": "^0.4.23",
+        "@qdrant/js-client-rest": "^1.19.0",
+        "hono": "^4.13.3",
+        "ioredis": "^6.0.0",
+        "picomatch": "^4.0.2",
+        "pino": "^10.3.1",
+        "yaml": "^2.7.0",
+        "zod": "^3.25.76"
+    },
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "@types/picomatch": "^4.0.3",
+        "tsx": "^4.23.12",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.11"
+    }
+}

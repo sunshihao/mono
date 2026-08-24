@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { WorkflowDto, WorkflowGraph, WorkflowVersionDto } from "@repo/types";
+import type {
+    WorkflowDto,
+    WorkflowGraph,
+    WorkflowVersionDto,
+} from "@repo/types";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,14 +87,24 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDto }) {
                     {viewingVersion !== null && `（查看 v${viewingVersion}）`}
                 </Badge>
                 <div className="mb-2 flex items-center gap-2">
-                    <Button onClick={() => void save()} disabled={saving || !dirty}>
+                    <Button
+                        onClick={() => void save()}
+                        disabled={saving || !dirty}
+                    >
                         {saving ? "保存中…" : dirty ? "保存更改" : "已保存"}
                     </Button>
-                    <Button variant="outline" onClick={() => void loadVersions()}>
+                    <Button
+                        variant="outline"
+                        onClick={() => void loadVersions()}
+                    >
                         版本历史
                     </Button>
                 </div>
-                {message && <p className="mb-2 text-sm text-muted-foreground">{message}</p>}
+                {message && (
+                    <p className="mb-2 text-sm text-muted-foreground">
+                        {message}
+                    </p>
+                )}
             </div>
 
             {versions.length > 0 && (
@@ -98,7 +112,9 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDto }) {
                     {versions.map((v) => (
                         <Button
                             key={v.id}
-                            variant={v.version === version ? "default" : "outline"}
+                            variant={
+                                v.version === version ? "default" : "outline"
+                            }
                             size="sm"
                             onClick={() => viewVersion(v)}
                         >
@@ -110,7 +126,11 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDto }) {
 
             <WorkflowCanvas graph={draft} onChange={setDraft} height={420} />
 
-            <WorkflowRunPanel workflowId={workflow.id} graph={saved} dirty={dirty} />
+            <WorkflowRunPanel
+                workflowId={workflow.id}
+                graph={saved}
+                dirty={dirty}
+            />
         </div>
     );
 }

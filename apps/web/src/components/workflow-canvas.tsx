@@ -35,28 +35,23 @@ const TYPE_META: Record<
 > = {
     start: {
         label: "开始",
-        className:
-            "border-emerald-500 bg-emerald-50 dark:bg-emerald-950",
+        className: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950",
     },
     llm: {
         label: "LLM",
-        className:
-            "border-violet-500 bg-violet-50 dark:bg-violet-950",
+        className: "border-violet-500 bg-violet-50 dark:bg-violet-950",
     },
     retrieve: {
         label: "检索",
-        className:
-            "border-sky-500 bg-sky-50 dark:bg-sky-950",
+        className: "border-sky-500 bg-sky-50 dark:bg-sky-950",
     },
     router: {
         label: "路由",
-        className:
-            "border-amber-500 bg-amber-50 dark:bg-amber-950",
+        className: "border-amber-500 bg-amber-50 dark:bg-amber-950",
     },
     end: {
         label: "结束",
-        className:
-            "border-rose-500 bg-rose-50 dark:bg-rose-950",
+        className: "border-rose-500 bg-rose-50 dark:bg-rose-950",
     },
 };
 
@@ -77,8 +72,9 @@ function graphToFlow(graph: WorkflowGraph): {
         position: { x: (i % 3) * 240, y: Math.floor(i / 3) * 140 },
         data: { label: n.label ?? TYPE_META[n.type].label, nodeType: n.type },
         className: cn(
-            "rounded-md border-2 px-3 py-2 text-sm font-medium shadow-sm",
+            "rounded-md border-2 px-3 py-2 text-sm font-medium shadow-sm ",
             TYPE_META[n.type].className,
+            "text-black",
         ),
     }));
     const edges: Edge[] = graph.edges.map((e) => ({

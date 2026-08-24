@@ -1,0 +1,6 @@
+# 各子仓库的 clone（git submodule / 独立 clone），不纳入宿主仓库
+repos/
+# 同步状态落盘目录
+.sync-state/
+# 本地凭据
+.env

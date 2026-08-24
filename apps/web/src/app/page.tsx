@@ -41,9 +41,9 @@ export default async function HomePage() {
                 <h1 className="text-3xl font-bold tracking-tight">
                     RAG 工作台
                 </h1>
-                <p className="text-muted-foreground">
+                {/*<p className="text-muted-foreground">
                     Hono 网关 · LangGraph 编排 · LlamaIndexTS + Qdrant 检索
-                </p>
+                </p>*/}
             </header>
 
             <RetrievalPanel />

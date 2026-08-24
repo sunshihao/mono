@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **业务埋点**：RAG 管线（rag.pipeline/embed/search/synthesize 子 span + 属性）、llm.chat、langgraph 节点均打 OTel span（`trace.getTracer` 全局 no-op 安全）；LANGFUSE 密钥配好后经 telemetry/init 自动上报 Langfuse。
 - `packages/types`（`@repo/types`）— 共享 zod schema/类型：workflow 图、API DTO（含 RunRequest/Update/Version）、AgentState、ingestion 信封、RAG 常量（对齐 ../RAG）。zod schema 是唯一事实源。
 - `apps/ingestion`（`@repo/ingestion`）— 独立 Node 进程（非 Edge）：**生产侧** chokidar v5 监听 + Hono webhook + 定时轮询 hash 比对，统一 XADD 到 `ingestion:events` Stream；**消费侧**（REDIS_URL + QDRANT_URL + OPENAI_API_KEY 齐备时启动）Consumer Group 消费 → 切分（512/50）→ 批量嵌入 → Qdrant upsert（同 doc_hash 先删后写幂等）。端口 3002。
+- `apps/data`（`@repo/data`）— **多 Git 仓库 → 多向量库增量同步系统**（设计蓝图见该目录 README 与根目录 `apps/data` 设计说明）。`sync.config.yaml`（env:VAR 注入）为仓库↔collection 映射唯一真源；每仓库一条 Redis Stream（`data-sync:<repo>`）+ SET NX 消费租约（per-repo FIFO + 水平扩展）。webhook（3003，HMAC 每仓库 secret）→ worker → `git diff <state.sha|空树> <after>`（A/M/D/R 分类）→ 切块（auto/markdown/code/fixed）→ DashScope 嵌入 → Qdrant upsert（point id = sha256(repo:file_path:chunk_index) 转 UUID，幂等；M 差集删除、R 向量搬运）。state（`.sync-state/<repo>.state.json`）仅在全部写成功后推进；失败经 ZSET 延迟队列指数退避重试 → DLQ 流；reconcile 定时对账兜底。CLI：`sync/backfill/cleanup/status/config-check/reconcile/worker/webhook/serve`（`--dry-run` 全链路预览）。仅接 `repos/chinese-buy-us-stock-guide`（AIGC-Interview-Book 暂缓）。
 - `apps/web`（`@repo/web`）— Next.js 14.2.35 + @xyflow/react + 手工 shadcn 风格组件。`/` 工作流列表 + 新建入口；`/workflows/[id]` **可编辑画布**（增删 5 类节点/连线/router 条件边/重命名）→ 保存（PUT）→ 版本历史浏览 + **多轮运行面板**（携带 messages 重放）；检索面板（真实管线）。端口 3001。
 - **远程基础设施**（凭据在根 `.env` 与各 app `.env`，均已 gitignore）：PG `115.190.209.1:5433/myappdb`（自签证书需 `sslmode=no-verify`，drizzle 表已 push）、Redis `115.190.209.1:6380`（密码含逗号）、Qdrant `115.190.209.1:6333`（明文 HTTP 带 token）、DashScope。
 
@@ -22,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm install      # 安装全部 workspace 依赖
 pnpm dev          # types build → 并行启动 api(3000) + ingestion(3002)
 pnpm dev:web      # types/api build → web dev(3001)，依赖 api dist（AppType）
-pnpm build        # types → api → ingestion → web（顺序保证 dist 就绪）
+pnpm build        # types → api → ingestion → data → web（顺序保证 dist 就绪）
 pnpm typecheck    # 全 workspace tsc --noEmit
 pnpm test         # vitest（先构建 types）
 pnpm lint         # eslint（flat config，根 eslint.config.js）

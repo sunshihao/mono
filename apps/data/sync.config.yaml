@@ -1,0 +1,32 @@
+# 仓库 <-> 向量库 映射总配置（唯一真源）。
+# 任何字符串值都可写成 env:VAR 形式从环境变量注入。
+# 新仓库接入：git submodule add <url> repos/<name> + 在 repositories 下登记一条 + backfill。
+
+version: 1
+
+vector_store:
+  provider: qdrant            # 目前仅支持 qdrant
+  url: env:QDRANT_URL
+  api_key: env:QDRANT_API_KEY
+
+embedding:
+  provider: dashscope         # dashscope | openai（均为 OpenAI 兼容端点）
+  model: text-embedding-v4
+  dimensions: 1024
+  batch_size: 16
+  api_key: env:OPENAI_API_KEY
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+repositories:
+  - name: chinese-buy-us-stock-guide
+    github: zgwl/chinese-buy-us-stock-guide
+    local_path: repos/chinese-buy-us-stock-guide
+    branch: main
+    collection: chinese-buy-us-stock-guide-main
+    include: ["**/*.md"]
+    exclude: []
+    chunking:
+      strategy: auto          # auto | markdown_aware | code_aware | fixed_size
+      chunk_size: 800         # 每块字符数（≈token 数，中文近似 1 字符/1 token）
+      overlap: 100
+    webhook_secret_ref: env:GH_WEBHOOK_SECRET_STOCK_GUIDE

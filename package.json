@@ -6,7 +6,8 @@
     "scripts": {
         "dev": "pnpm --filter @repo/types build && pnpm --parallel --filter @repo/api --filter @repo/ingestion dev",
         "dev:web": "pnpm --filter @repo/types build && pnpm --filter @repo/api build && pnpm --filter @repo/web dev",
-        "build": "pnpm --filter @repo/types build && pnpm --filter @repo/api build && pnpm --filter @repo/ingestion build && pnpm --filter @repo/web build",
+        "dev:data": "pnpm --filter @repo/data dev",
+        "build": "pnpm --filter @repo/types build && pnpm --filter @repo/api build && pnpm --filter @repo/ingestion build && pnpm --filter @repo/data build && pnpm --filter @repo/web build",
         "typecheck": "pnpm -r typecheck",
         "test": "pnpm --filter @repo/types build && pnpm -r test",
         "lint": "eslint ."
