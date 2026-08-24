@@ -12,6 +12,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import ReactMarkdown from "react-markdown";
 import { Input } from "@/components/ui/input";
 
 /**
@@ -46,7 +47,8 @@ export function RetrievalPanel() {
             <CardHeader>
                 <CardTitle>知识库问答</CardTitle>
                 <CardDescription>
-                    检索管线：text-embedding-v4 嵌入 → Qdrant 检索 → qwen-plus 合成
+                    {/*检索管线：text-embedding-v4 嵌入 → Qdrant 检索 → qwen-plus
+                    合成*/}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -79,13 +81,18 @@ export function RetrievalPanel() {
                             {result.disabled ? "降级响应" : result.provider}
                         </Badge>
                         <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {result.answer ?? "（无答案）"}
+                            {result.answer ? (
+                                <ReactMarkdown>{result.answer}</ReactMarkdown>
+                            ) : (
+                                "（无答案）"
+                            )}
                         </p>
                         {result.sources.length > 0 && (
                             <ul className="space-y-1 text-xs text-muted-foreground">
                                 {result.sources.map((s, i) => (
                                     <li key={i}>
-                                        {s.file_name}（{(s.score ?? 0).toFixed(3)}）
+                                        {s.file_name}（
+                                        {(s.score ?? 0).toFixed(3)}）
                                     </li>
                                 ))}
                             </ul>
