@@ -8,6 +8,7 @@
 mono/
 ├── apps/
 │   ├── api/          # @repo/api —— Hono API 网关（框架核心，集成一律为插件）
+│   ├── data/         # @repo/data —— 多仓库→多向量库增量同步（webhook→Stream→diff→嵌入→per-repo collection）
 │   ├── ingestion/    # @repo/ingestion —— 摄入服务（生产：chokidar+webhook+轮询 → XADD；消费：切分/嵌入 → Qdrant upsert）
 │   └── web/          # @repo/web —— Next 14 + React Flow + shadcn 风格组件
 └── packages/
@@ -20,14 +21,16 @@ mono/
 |---|---|
 | `pnpm install` | 安装全部 workspace 依赖 |
 | `pnpm dev` | types 构建后并行启动 api(3000) + ingestion(3002) |
+| `pnpm dev:data` | 启动 data 服务（webhook + worker + 对账一体化，3003） |
 | `pnpm dev:web` | 构建 types/api 后启动 web(3001) |
-| `pnpm build` | types → api → ingestion → web |
+| `pnpm build` | types → api → ingestion → data → web |
 | `pnpm typecheck` / `pnpm test` / `pnpm lint` | 全仓类型检查 / 测试 / 检查 |
 
 ## 核心能力
 
 - **数据写入闭环**：文件放入 `INGEST_DIR` → chokidar 事件 → XADD `ingestion:events` → Consumer Group 消费 → 句边界切分（512/50）→ DashScope 批量嵌入 → Qdrant upsert（同 doc_hash 幂等）。
-- **真实 RAG 管线**：`POST /v1/retrieval/query` —— 嵌入 → 远程 Qdrant `knowledgeOfAI` 检索 → qwen-plus 中文合成。
+- **多仓库 → 多向量库增量同步**：`apps/data` 把任意数量的 GitHub 仓库同步进 Qdrant——每仓库一个独立 collection，push 时只同步本次提交的 A/M/D/R 文件变化（见下文专节）。
+- **真实 RAG 管线**：`POST /v1/retrieval/query` —— 嵌入 → 远程 Qdrant **多集合检索**（`knowledgeOfAI` 命名向量 + apps/data 同步的 per-repo 未命名向量集合，`RAG_SEARCH_COLLECTIONS` 声明清单，逐集合查询按 score 合并取 topK）→ qwen-plus 中文合成。
 - **工作流编排（端到端）**：web 画布编辑（增删节点/连线/条件边）→ 保存（PUT，改图自动升版本）→ 版本历史浏览 → `POST /v1/workflows/:id/run` 多轮执行（messages 历史重放 + MemorySaver checkpointer）。
 - **摄入三来源**：chokidar / `POST /webhooks/:source` / 定时轮询 hash 比对。
 - **端到端类型安全**：`@repo/types` zod schema → api 路由 → `AppType` → web `hc<AppType>`。
