@@ -6,6 +6,8 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { SkillManager } from "@/components/skill-manager";
+import { McpToolManager } from "@/components/mcp-tool-manager";
 
 /** 画布 5 类节点元素的说明（与 workflow-canvas TYPE_META 语义一致） */
 const NODE_ELEMENTS = [
@@ -43,6 +45,18 @@ const NODE_ELEMENTS = [
 export function SettingsPanel() {
     return (
         <>
+            <Card>
+                <CardContent className="pt-6">
+                    <SkillManager />
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardContent className="pt-6">
+                    <McpToolManager />
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">

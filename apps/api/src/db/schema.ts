@@ -63,3 +63,34 @@ export const users = pgTable("user", {
     updatedAt: date("updated_at", { mode: "date" }),
     status: integer("status").notNull(),
 });
+
+/** 提示词型技能（设置页配置；工作流 skill 节点经 config.refId 引用） */
+export const skills = pgTable("skills", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    prompt: text("prompt").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+});
+
+/** 外部工具端点注册（设置页配置；工作流 mcp 节点经 config.refId 引用） */
+export const mcpTools = pgTable("mcp_tools", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    method: text("method").notNull(),
+    url: text("url").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+});

@@ -140,3 +140,70 @@ export const LoginResponseDtoSchema = z.object({
     }),
 });
 export type LoginResponseDto = z.infer<typeof LoginResponseDtoSchema>;
+
+/**
+ * Skill（提示词型技能，设置页配置、工作流 skill 节点经 config.refId 引用）。
+ * prompt 在节点执行时作为 system 指令注入 LLM。
+ */
+export const SkillCreateInputSchema = z.object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(500).optional(),
+    prompt: z.string().trim().min(1).max(4000),
+});
+export type SkillCreateInput = z.infer<typeof SkillCreateInputSchema>;
+
+export const SkillUpdateInputSchema = SkillCreateInputSchema.partial().extend({
+    enabled: z.boolean().optional(),
+});
+export type SkillUpdateInput = z.infer<typeof SkillUpdateInputSchema>;
+
+export const SkillDtoSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    prompt: z.string(),
+    enabled: z.boolean(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+export type SkillDto = z.infer<typeof SkillDtoSchema>;
+
+export const SkillListDtoSchema = z.object({
+    skills: z.array(SkillDtoSchema),
+});
+export type SkillListDto = z.infer<typeof SkillListDtoSchema>;
+
+/**
+ * McpTool（外部工具端点注册：把 MCP/外部服务工具声明为 HTTP 调用，
+ * 工作流 mcp 节点经 config.refId 引用；url 支持 {query} 占位符）。
+ */
+export const McpToolCreateInputSchema = z.object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(500).optional(),
+    method: z.enum(["GET", "POST"]).default("GET"),
+    url: z.string().trim().url().max(2000),
+});
+export type McpToolCreateInput = z.infer<typeof McpToolCreateInputSchema>;
+
+export const McpToolUpdateInputSchema =
+    McpToolCreateInputSchema.partial().extend({
+        enabled: z.boolean().optional(),
+    });
+export type McpToolUpdateInput = z.infer<typeof McpToolUpdateInputSchema>;
+
+export const McpToolDtoSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    method: z.enum(["GET", "POST"]),
+    url: z.string(),
+    enabled: z.boolean(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+export type McpToolDto = z.infer<typeof McpToolDtoSchema>;
+
+export const McpToolListDtoSchema = z.object({
+    tools: z.array(McpToolDtoSchema),
+});
+export type McpToolListDto = z.infer<typeof McpToolListDtoSchema>;

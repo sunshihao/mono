@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- 精简自 src/asstes/logo.svg（仅保留可视图形，供浏览器 favicon 使用） -->
+  <path d="M32.29 44 L60 60 L32.29 76" stroke="#000" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#000" stroke-width="3" stroke-linecap="round">
+    <line x1="60" y1="60" x2="87.71" y2="44"/>
+    <line x1="60" y1="60" x2="92" y2="60"/>
+    <line x1="60" y1="60" x2="87.71" y2="76"/>
+  </g>
+  <circle cx="87.71" cy="44" r="6" fill="#000"/>
+  <circle cx="92" cy="60" r="6" fill="#000"/>
+  <circle cx="87.71" cy="76" r="6" fill="#000"/>
+</svg>

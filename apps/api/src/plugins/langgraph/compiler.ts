@@ -12,18 +12,38 @@ import { StateAnnotation } from "./state.js";
 
 type NodeUpdate = { messages?: AgentMessage[] };
 
+/** skill/mcp 引用节点的配置解析结果（langgraph 插件注入实现，查 DB） */
+export interface NodeConfigResolvers {
+    resolveSkill: (
+        refId: string,
+    ) => Promise<{ name: string; prompt: string; enabled: boolean } | null>;
+    resolveMcpTool: (refId: string) => Promise<{
+        name: string;
+        method: "GET" | "POST";
+        url: string;
+        enabled: boolean;
+    } | null>;
+}
+
+export interface CompileOptions {
+    checkpointer?: BaseCheckpointSaver;
+    /** skill/mcp 节点的引用解析器；未提供时这类节点返回"不可用"提示 */
+    resolvers?: NodeConfigResolvers;
+}
+
 const nodeTracer = trace.getTracer("@repo/api/langgraph");
 
 /**
  * 把可序列化的 WorkflowGraph 编译为 LangGraph 可执行图。
- * 节点映射：start→入口、llm→LLM 对话节点、retrieve→检索节点、router→条件边、end→出口。
+ * 节点映射：start→入口、llm→LLM 对话节点、retrieve→检索节点、
+ * skill→提示词技能（system 注入）、mcp→HTTP 端点工具、router→条件边、end→出口。
  * 约定：router 出边的 condition 即 path key（pathMap 另有 "default" 兜底）；
  * 运行时路由键取 state.route ?? state.currentChannel。
  */
 export function compileGraph(
     graph: WorkflowGraph,
     llm: LlamaIndexService,
-    options: { checkpointer?: BaseCheckpointSaver } = {},
+    options: CompileOptions = {},
 ) {
     validateGraph(graph);
 
@@ -38,7 +58,9 @@ export function compileGraph(
         string
     >(StateAnnotation);
     for (const node of graph.nodes) {
-        builder.addNode(node.id, (state) => nodeAction(node, llm, state));
+        builder.addNode(node.id, (state) =>
+            nodeAction(node, llm, state, options.resolvers),
+        );
     }
     builder.addEdge(START, startNode.id);
 
@@ -117,6 +139,7 @@ async function nodeAction(
     node: WorkflowNode,
     llm: LlamaIndexService,
     state: typeof StateAnnotation.State,
+    resolvers: NodeConfigResolvers | undefined,
 ): Promise<NodeUpdate> {
     return nodeTracer.startActiveSpan(
         "langgraph.node",
@@ -130,7 +153,7 @@ async function nodeAction(
         },
         async (span) => {
             try {
-                return await executeNode(node, llm, state);
+                return await executeNode(node, llm, state, resolvers);
             } catch (err) {
                 span.recordException(err as Error);
                 throw err;
@@ -141,10 +164,17 @@ async function nodeAction(
     );
 }
 
+/** 读取节点 config.refId（引用型节点：skill/mcp 指向注册表行的 uuid） */
+function refIdOf(node: WorkflowNode): string {
+    const refId = node.config?.refId;
+    return typeof refId === "string" ? refId : "";
+}
+
 async function executeNode(
     node: WorkflowNode,
     llm: LlamaIndexService,
     state: typeof StateAnnotation.State,
+    resolvers: NodeConfigResolvers | undefined,
 ): Promise<NodeUpdate> {
     switch (node.type) {
         case "start":
@@ -182,6 +212,128 @@ async function executeNode(
                         content: sources
                             ? `${answer}\n（来源：${sources}）`
                             : answer,
+                    },
+                ],
+            };
+        }
+        case "skill": {
+            const refId = refIdOf(node);
+            if (!refId) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: "技能节点未配置引用（缺少 refId）。",
+                        },
+                    ],
+                };
+            }
+            const skill = resolvers
+                ? await resolvers.resolveSkill(refId)
+                : null;
+            if (!skill) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: "技能不存在或已被删除，无法执行。",
+                        },
+                    ],
+                };
+            }
+            if (!skill.enabled) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: `技能「${skill.name}」已停用，请在设置中启用。`,
+                        },
+                    ],
+                };
+            }
+            // prompt 作为 system 指令注入后接全量会话历史
+            const answer = await llm.chat([
+                { role: "system", content: skill.prompt },
+                ...state.messages,
+            ]);
+            return { messages: [{ role: "assistant", content: answer }] };
+        }
+        case "mcp": {
+            const refId = refIdOf(node);
+            if (!refId) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: "MCP 工具节点未配置引用（缺少 refId）。",
+                        },
+                    ],
+                };
+            }
+            const tool = resolvers
+                ? await resolvers.resolveMcpTool(refId)
+                : null;
+            if (!tool) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: "MCP 工具不存在或已被删除，无法执行。",
+                        },
+                    ],
+                };
+            }
+            if (!tool.enabled) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: `MCP 工具「${tool.name}」已停用，请在设置中启用。`,
+                        },
+                    ],
+                };
+            }
+            const lastUser = [...state.messages]
+                .reverse()
+                .find((m) => m.role === "user");
+            const url = tool.url.replace(
+                "{query}",
+                encodeURIComponent(lastUser?.content ?? ""),
+            );
+            let text: string;
+            try {
+                const res = await fetch(url, {
+                    method: tool.method,
+                    headers: { accept: "text/plain" },
+                });
+                if (!res.ok) {
+                    return {
+                        messages: [
+                            {
+                                role: "assistant",
+                                content: `MCP 工具「${tool.name}」请求失败（HTTP ${res.status}）。`,
+                            },
+                        ],
+                    };
+                }
+                text = await res.text();
+            } catch (err) {
+                return {
+                    messages: [
+                        {
+                            role: "assistant",
+                            content: `MCP 工具「${tool.name}」调用出错：${
+                                err instanceof Error ? err.message : "未知错误"
+                            }`,
+                        },
+                    ],
+                };
+            }
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: text.slice(0, 8000) || "（工具无返回内容）",
                     },
                 ],
             };

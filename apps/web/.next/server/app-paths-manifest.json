@@ -1,5 +1,5 @@
 {
-  "/workflows/[id]/page": "app/workflows/[id]/page.js",
   "/page": "app/page.js",
-  "/login/page": "app/login/page.js"
+  "/login/page": "app/login/page.js",
+  "/workflows/[id]/page": "app/workflows/[id]/page.js"
 }

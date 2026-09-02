@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
@@ -28,9 +29,18 @@ export default function RootLayout({
                 />
                 {session && (
                     <header className="flex items-center justify-between border-b px-6 py-3">
-                        <h1 className="text-3xl font-bold tracking-tight">
-                            RAG 工作台
-                        </h1>
+                        <Link href="/" className="flex items-center gap-2">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-sm rounded-r-lg bg-[#e5e7eb] p-1.5 shadow-sm dark:bg-neutral-800">
+                                <img
+                                    src="/logo.svg"
+                                    alt="RAG 工作台 logo"
+                                    className="h-full w-full dark:invert"
+                                />
+                            </span>
+                            <span className="text-base font-semibold tracking-tight">
+                                RAG 工作台
+                            </span>
+                        </Link>
                         <UserMenu username={session.username} />
                     </header>
                 )}

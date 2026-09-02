@@ -3,7 +3,9 @@ import type { AppEnv } from "../types.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { mountAuth } from "./auth.js";
 import { mountHealth } from "./health.js";
+import { mountMcpTools } from "./mcp-tools.js";
 import { mountRetrieval } from "./retrieval.js";
+import { mountSkills } from "./skills.js";
 import { mountWorkflows } from "./workflows.js";
 
 /**
@@ -13,6 +15,8 @@ import { mountWorkflows } from "./workflows.js";
  */
 export function mountRoutes(app: Hono<AppEnv>, registry: PluginRegistry) {
     return mountRetrieval(
-        mountWorkflows(mountAuth(mountHealth(app, registry))),
+        mountWorkflows(
+            mountSkills(mountMcpTools(mountAuth(mountHealth(app, registry)))),
+        ),
     );
 }

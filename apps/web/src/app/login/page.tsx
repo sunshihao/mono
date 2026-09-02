@@ -8,7 +8,22 @@ export default async function LoginPage() {
     if (session) redirect("/");
 
     return (
-        <main className="flex min-h-screen items-center justify-center p-6">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-6">
+            <div className="flex items-center gap-3">
+                <img
+                    src="/logo.svg"
+                    alt="RAG 工作台 logo"
+                    className="h-10 w-10 dark:invert"
+                />
+                <div>
+                    <p className="text-xl font-bold tracking-tight">
+                        RAG 工作台
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        工作流编排 · 知识库问答 · MCP 接入
+                    </p>
+                </div>
+            </div>
             <LoginForm />
         </main>
     );
