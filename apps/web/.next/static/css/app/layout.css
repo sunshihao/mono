@@ -535,9 +535,40 @@ video {
     max-width: 1536px;
   }
 }
+.absolute {
+  position: absolute;
+}
+.relative {
+  position: relative;
+}
+.left-0 {
+  left: 0px;
+}
+.left-full {
+  left: 100%;
+}
+.top-0 {
+  top: 0px;
+}
+.top-full {
+  top: 100%;
+}
+.right-0 {
+  right: 0px;
+}
+.right-full {
+  right: 100%;
+}
+.z-50 {
+  z-index: 50;
+}
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
+}
+.my-1 {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 .mb-2 {
   margin-bottom: 0.5rem;
@@ -545,8 +576,23 @@ video {
 .ml-auto {
   margin-left: auto;
 }
+.ml-1 {
+  margin-left: 0.25rem;
+}
+.mt-2 {
+  margin-top: 0.5rem;
+}
+.mr-1 {
+  margin-right: 0.25rem;
+}
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
 .block {
   display: block;
+}
+.inline {
+  display: inline;
 }
 .flex {
   display: flex;
@@ -556,6 +602,9 @@ video {
 }
 .grid {
   display: grid;
+}
+.hidden {
+  display: none;
 }
 .h-10 {
   height: 2.5rem;
@@ -572,17 +621,44 @@ video {
 .h-full {
   height: 100%;
 }
+.h-px {
+  height: 1px;
+}
+.h-1\.5 {
+  height: 0.375rem;
+}
 .max-h-96 {
   max-height: 24rem;
 }
+.max-h-\[55vh\] {
+  max-height: 55vh;
+}
 .min-h-screen {
   min-height: 100vh;
+}
+.min-h-\[80px\] {
+  min-height: 80px;
+}
+.min-h-\[44px\] {
+  min-height: 44px;
 }
 .w-64 {
   width: 16rem;
 }
 .w-full {
   width: 100%;
+}
+.w-36 {
+  width: 9rem;
+}
+.w-48 {
+  width: 12rem;
+}
+.w-8 {
+  width: 2rem;
+}
+.w-1\.5 {
+  width: 0.375rem;
 }
 .max-w-5xl {
   max-width: 64rem;
@@ -596,17 +672,49 @@ video {
 .max-w-sm {
   max-width: 24rem;
 }
+.max-w-\[80\%\] {
+  max-width: 80%;
+}
+.shrink-0 {
+  flex-shrink: 0;
+}
+@keyframes pulse {
+
+  50% {
+    opacity: .5;
+  }
+}
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.select-none {
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+.flex-row {
+  flex-direction: row;
+}
 .flex-col {
   flex-direction: column;
 }
 .flex-wrap {
   flex-wrap: wrap;
 }
+.items-start {
+  align-items: flex-start;
+}
 .items-end {
   align-items: flex-end;
 }
 .items-center {
   align-items: center;
+}
+.justify-start {
+  justify-content: flex-start;
+}
+.justify-end {
+  justify-content: flex-end;
 }
 .justify-center {
   justify-content: center;
@@ -658,6 +766,16 @@ video {
   margin-top: calc(2rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(2rem * var(--tw-space-y-reverse));
 }
+.space-y-0 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0px * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0px * var(--tw-space-y-reverse));
+}
+.space-y-0\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.125rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.125rem * var(--tw-space-y-reverse));
+}
 .overflow-x-auto {
   overflow-x: auto;
 }
@@ -678,6 +796,9 @@ video {
 }
 .rounded-md {
   border-radius: calc(var(--radius) - 2px);
+}
+.rounded {
+  border-radius: 0.25rem;
 }
 .border {
   border-width: 1px;
@@ -749,11 +870,26 @@ video {
   --tw-bg-opacity: 1;
   background-color: rgb(245 243 255 / var(--tw-bg-opacity, 1));
 }
+.bg-border {
+  background-color: hsl(var(--border));
+}
+.bg-muted\/50 {
+  background-color: hsl(var(--muted) / 0.5);
+}
+.bg-current {
+  background-color: currentColor;
+}
 .p-4 {
   padding: 1rem;
 }
 .p-6 {
   padding: 1.5rem;
+}
+.p-1 {
+  padding: 0.25rem;
+}
+.p-3 {
+  padding: 0.75rem;
 }
 .px-2\.5 {
   padding-left: 0.625rem;
@@ -766,6 +902,10 @@ video {
 .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
 }
 .px-8 {
   padding-left: 2rem;
@@ -783,19 +923,39 @@ video {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
-.px-6 {
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-}
 .py-3 {
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
 }
+.px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.py-1\.5 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
 .pt-0 {
   padding-top: 0px;
 }
+.pr-1 {
+  padding-right: 0.25rem;
+}
+.text-left {
+  text-align: left;
+}
+.text-center {
+  text-align: center;
+}
 .font-sans {
   font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 .text-2xl {
   font-size: 1.5rem;
@@ -880,6 +1040,11 @@ video {
   --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
+.shadow-md {
+  --tw-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
 .outline {
   outline-style: solid;
 }
@@ -913,26 +1078,26 @@ video {
     --radius: 0.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: 240 10% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 240 10% 5.9%;
-        --card-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 240 5.9% 10%;
-        --secondary: 240 3.7% 15.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 240 3.7% 15.9%;
-        --muted-foreground: 240 5% 64.9%;
-        --accent: 240 3.7% 15.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 240 3.7% 15.9%;
-        --input: 240 3.7% 15.9%;
-        --ring: 240 4.9% 83.9%;
-    }
+/* 暗色主题（手动切换）：layout 中 inline script 在首帧前按 localStorage/系统偏好
+ * 给 <html> 加 .dark 类（默认浅色；React Flow 等组件颜色走变量自动适配） */
+.dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.9%;
+    --card-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
 }
 
 /*
@@ -999,8 +1164,16 @@ video {
   background-color: hsl(var(--primary) / 0.9);
 }
 
+.hover\:bg-destructive\/10:hover {
+  background-color: hsl(var(--destructive) / 0.1);
+}
+
 .hover\:text-accent-foreground:hover {
   color: hsl(var(--accent-foreground));
+}
+
+.hover\:text-foreground:hover {
+  color: hsl(var(--foreground));
 }
 
 .hover\:underline:hover {

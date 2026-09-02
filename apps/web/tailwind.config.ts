@@ -2,6 +2,7 @@ import type { Config } from "tailwindcss";
 
 /** shadcn/ui 风格：颜色走 globals.css 的 CSS 变量（HSL 三元组） */
 const config: Config = {
+    darkMode: "class",
     content: ["./src/**/*.{ts,tsx}"],
     theme: {
         extend: {
