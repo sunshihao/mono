@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Settings } from "llamaindex";
 import { OpenAI, OpenAIEmbedding } from "@llamaindex/openai";
 import { trace } from "@opentelemetry/api";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
     QueryResponseSchema,
@@ -14,6 +15,7 @@ import {
 import type { LlamaIndexService } from "../../types.js";
 import type { Plugin } from "../types.js";
 import { createLogger } from "../../lib/logger.js";
+import { mcpTools, skills } from "../../db/schema.js";
 import {
     collectionsId,
     parseCollections,
@@ -22,6 +24,7 @@ import {
 import {
     runRagPipeline,
     runRagSearch,
+    type RagEnhancement,
     type RetrievedPoint,
 } from "./pipeline.js";
 import { extractText } from "./text.js";
@@ -46,10 +49,21 @@ const ConfigSchema = z.object({
 });
 type Config = z.infer<typeof ConfigSchema>;
 
-/** 检索缓存键（query+topK+集合清单决定检索结果；TTL 内文档更新可能有陈旧窗口） */
-function cacheKey(query: string, topK: number, collections: string): string {
+/**
+ * 检索缓存键（query+topK+集合清单决定检索结果；TTL 内文档更新可能有陈旧窗口）。
+ * skillId/mcpToolId 参与键：附加能力不同不得串用缓存。
+ */
+function cacheKey(
+    query: string,
+    topK: number,
+    collections: string,
+    skillId?: string,
+    mcpToolId?: string,
+): string {
     const digest = createHash("sha256")
-        .update(`${query}|${topK}|${collections}`)
+        .update(
+            `${query}|${topK}|${collections}|${skillId ?? ""}|${mcpToolId ?? ""}`,
+        )
         .digest("hex");
     return `rag:cache:${digest}`;
 }
@@ -163,7 +177,10 @@ export const llamaindexPlugin: Plugin<LlamaIndexService> = {
                 { logger: ragLogger },
             );
 
-        const pipeline = (input: QueryRequest): Promise<QueryResponse> =>
+        const pipeline = (
+            input: QueryRequest,
+            enhance?: RagEnhancement,
+        ): Promise<QueryResponse> =>
             runRagPipeline(
                 {
                     embed: (text) => embedModel.getTextEmbedding(text),
@@ -171,7 +188,95 @@ export const llamaindexPlugin: Plugin<LlamaIndexService> = {
                     chat,
                 },
                 input,
+                enhance,
             );
+
+        /**
+         * 附加能力解析（请求携带 skillId/mcpToolId 时）：技能指令查 DB、
+         * MCP 工具查注册表并 fetch 端点。任一失败仅降级（warning），
+         * 不阻断主检索——主 RAG 保持可用。
+         */
+        const resolveEnhancement = async (
+            input: QueryRequest,
+        ): Promise<RagEnhancement | undefined> => {
+            const { skillId, mcpToolId } = input;
+            if (!skillId && !mcpToolId) return undefined;
+            const dbService = ctx.getServices().db;
+            const enhance: RagEnhancement = {};
+            const warnings: string[] = [];
+            if (skillId) {
+                const row = dbService
+                    ? await dbService.db
+                          .select({
+                              name: skills.name,
+                              prompt: skills.prompt,
+                              enabled: skills.enabled,
+                          })
+                          .from(skills)
+                          .where(eq(skills.id, skillId))
+                          .limit(1)
+                          .then((r) => r[0])
+                    : undefined;
+                if (!row) {
+                    warnings.push("技能不存在或已删除");
+                } else if (!row.enabled) {
+                    warnings.push(`技能「${row.name}」已停用`);
+                } else {
+                    enhance.skillName = row.name;
+                    enhance.skillPrompt = row.prompt;
+                }
+            }
+            if (mcpToolId) {
+                const row = dbService
+                    ? await dbService.db
+                          .select({
+                              name: mcpTools.name,
+                              method: mcpTools.method,
+                              url: mcpTools.url,
+                              enabled: mcpTools.enabled,
+                          })
+                          .from(mcpTools)
+                          .where(eq(mcpTools.id, mcpToolId))
+                          .limit(1)
+                          .then((r) => r[0])
+                    : undefined;
+                if (!row) {
+                    warnings.push("MCP 工具不存在或已删除");
+                } else if (!row.enabled) {
+                    warnings.push(`MCP 工具「${row.name}」已停用`);
+                } else {
+                    const url = row.url.replace(
+                        "{query}",
+                        encodeURIComponent(input.query),
+                    );
+                    try {
+                        const res = await fetch(url, {
+                            method: row.method as "GET" | "POST",
+                            headers: { accept: "text/plain" },
+                        });
+                        if (res.ok) {
+                            enhance.mcpName = row.name;
+                            enhance.mcpResult = (await res.text()).slice(
+                                0,
+                                4000,
+                            );
+                        } else {
+                            warnings.push(
+                                `MCP 工具「${row.name}」请求失败（HTTP ${res.status}）`,
+                            );
+                        }
+                    } catch (err) {
+                        warnings.push(
+                            `MCP 工具「${row.name}」调用出错：${
+                                err instanceof Error ? err.message : "未知错误"
+                            }`,
+                        );
+                    }
+                }
+            }
+            if (warnings.length > 0) enhance.warning = warnings.join("；");
+            return enhance;
+        };
 
         /** 纯检索管线（不合成）：与 query 共用 deps */
         const searchPipeline = (input: QueryRequest): Promise<SearchResponse> =>
@@ -221,9 +326,16 @@ export const llamaindexPlugin: Plugin<LlamaIndexService> = {
             query: (input) =>
                 withCache(
                     "rag:cache:",
-                    cacheKey(input.query, input.topK, targetsId),
+                    cacheKey(
+                        input.query,
+                        input.topK,
+                        targetsId,
+                        input.skillId,
+                        input.mcpToolId,
+                    ),
                     (raw) => QueryResponseSchema.safeParse(JSON.parse(raw)),
-                    () => pipeline(input),
+                    async () =>
+                        pipeline(input, await resolveEnhancement(input)),
                 ),
             search: (input) =>
                 withCache(

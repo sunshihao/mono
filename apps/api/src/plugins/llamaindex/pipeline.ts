@@ -23,6 +23,15 @@ export interface PipelineDeps {
 const SYSTEM_PROMPT =
     "你是知识库问答助手，仅依据用户提供的资料用中文回答；资料不足时明确说明。";
 
+/** 附加能力（技能/mcp）解析结果：由插件层查 DB / fetch 得到，管线只负责拼装 */
+export interface RagEnhancement {
+    skillName?: string;
+    skillPrompt?: string;
+    mcpName?: string;
+    mcpResult?: string;
+    warning?: string;
+}
+
 /**
  * 业务埋点用的 tracer（SDK 未启动时是全局 no-op，埋点代码无条件安全；
  * LANGFUSE 密钥配好后经 telemetry/init 自动上报）。
@@ -37,11 +46,13 @@ function payloadText(point: RetrievedPoint): string {
 /**
  * 完整 RAG 管线：嵌入查询 → Qdrant 命名向量检索 → 组装资料 → LLM 合成。
  * 每个阶段一个子 span（embed/search/synthesize），属性可进 Langfuse 做质量分析。
+ * enhance 可选：技能指令注入 system、MCP 工具返回并入上下文（请求携带 skillId/mcpToolId 时由插件层解析）。
  * 上游（Qdrant / LLM）失败 → HTTPException 502（503 保留给"集成未配置"）。
  */
 export async function runRagPipeline(
     deps: PipelineDeps,
     input: QueryRequest,
+    enhance?: RagEnhancement,
 ): Promise<QueryResponse> {
     return tracer.startActiveSpan(
         "rag.pipeline",
@@ -49,6 +60,12 @@ export async function runRagPipeline(
             attributes: {
                 "rag.query": input.query.slice(0, 500),
                 "rag.top_k": input.topK,
+                ...(enhance?.skillName
+                    ? { "rag.skill": enhance.skillName }
+                    : {}),
+                ...(enhance?.mcpName
+                    ? { "rag.mcp_tool": enhance.mcpName }
+                    : {}),
             },
         },
         async (span: Span) => {
@@ -99,11 +116,21 @@ export async function runRagPipeline(
                     "rag.synthesize",
                     async (synthSpan: Span) => {
                         try {
+                            // 技能指令并入 system；MCP 工具返回并入上下文（与检索资料并列）
+                            const system = [
+                                SYSTEM_PROMPT,
+                                ...(enhance?.skillPrompt
+                                    ? [`附加技能要求：\n${enhance.skillPrompt}`]
+                                    : []),
+                            ].join("\n\n");
+                            const mcpBlock = enhance?.mcpResult
+                                ? `外部工具「${enhance.mcpName}」返回：\n${enhance.mcpResult}\n\n`
+                                : "";
                             answer = await deps.chat([
-                                { role: "system", content: SYSTEM_PROMPT },
+                                { role: "system", content: system },
                                 {
                                     role: "user",
-                                    content: `资料：\n${context}\n\n问题：${input.query}`,
+                                    content: `${mcpBlock}资料：\n${context}\n\n问题：${input.query}`,
                                 },
                             ]);
                             synthSpan.setAttribute(
@@ -136,6 +163,16 @@ export async function runRagPipeline(
                     })),
                     provider: "llamaindex",
                     disabled: false,
+                    // 携带附加能力请求时回显应用情况（无增强不带字段，旧形状稳定）
+                    ...(enhance
+                        ? {
+                              enhancement: {
+                                  skillName: enhance.skillName ?? null,
+                                  mcpName: enhance.mcpName ?? null,
+                                  warning: enhance.warning ?? null,
+                              },
+                          }
+                        : {}),
                 };
                 span.setAttribute("rag.sources", response.sources.length);
                 span.setStatus({ code: SpanStatusCode.OK });

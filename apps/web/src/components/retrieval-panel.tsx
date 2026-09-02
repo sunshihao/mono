@@ -23,19 +23,78 @@ interface ChatMessage {
     /** 后端管线降级标记（stub 应答） */
     disabled?: boolean;
     provider?: string;
+    /** 附加能力应用情况（技能/mcp 注入回显） */
+    enhancement?: QueryResponse["enhancement"];
+}
+
+/** 技能/mcp 下拉数据源（设置页注册的已启用项） */
+interface ToolOption {
+    kind: "skill" | "mcp";
+    id: string;
+    name: string;
 }
 
 /**
  * 知识库问答（聊天形态）：hono/client 调用 POST /v1/retrieval/query
  * （真实 RAG 管线，非流式整答）。多轮历史保留在本地面板内，
  * 每轮独立检索——后端未集成时展示降级 stub 的契约形状。
+ * 输入区左上角可选择技能（prompt 注入）/ MCP 工具（端点返回并入上下文），
+ * 随请求携带 skillId/mcpToolId，由 API 合成阶段应用。
  */
 export function RetrievalPanel() {
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [skillId, setSkillId] = useState("");
+    const [mcpToolId, setMcpToolId] = useState("");
+    const [skillOptions, setSkillOptions] = useState<ToolOption[]>([]);
+    const [mcpOptions, setMcpOptions] = useState<ToolOption[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
+
+    // 加载可选的技能/工具（已启用项）
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                const [skRes, mcpRes] = await Promise.all([
+                    api.v1.skills.$get(),
+                    api.v1["mcp-tools"].$get(),
+                ]);
+                if (cancelled) return;
+                if (skRes.ok) {
+                    const body = await skRes.json();
+                    setSkillOptions(
+                        body.skills
+                            .filter((s) => s.enabled)
+                            .map((s) => ({
+                                kind: "skill" as const,
+                                id: s.id,
+                                name: s.name,
+                            })),
+                    );
+                }
+                if (mcpRes.ok) {
+                    const body = await mcpRes.json();
+                    setMcpOptions(
+                        body.tools
+                            .filter((t) => t.enabled)
+                            .map((t) => ({
+                                kind: "mcp" as const,
+                                id: t.id,
+                                name: t.name,
+                            })),
+                    );
+                }
+            } catch {
+                // 加载失败：无可用选项，问答仍可用
+            }
+        }
+        void load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // 新消息/加载占位出现时滚动到底部
     useEffect(() => {
@@ -51,7 +110,11 @@ export function RetrievalPanel() {
         setMessages((prev) => [...prev, { role: "user", content: query }]);
         try {
             const res = await api.v1.retrieval.query.$post({
-                json: { query },
+                json: {
+                    query,
+                    ...(skillId ? { skillId } : {}),
+                    ...(mcpToolId ? { mcpToolId } : {}),
+                },
             });
             if (!res.ok) throw new Error(`请求失败（HTTP ${res.status}）`);
             const data: QueryResponse = await res.json();
@@ -63,6 +126,7 @@ export function RetrievalPanel() {
                     sources: data.sources,
                     disabled: data.disabled,
                     provider: data.provider,
+                    enhancement: data.enhancement,
                 },
             ]);
         } catch (err) {
@@ -116,6 +180,41 @@ export function RetrievalPanel() {
                     <div ref={bottomRef} />
                 </div>
 
+                {/* 附加能力工具行（输入框左上角）：可选技能 / MCP 工具带入请求 */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        aria-label="附加技能"
+                        value={skillId}
+                        onChange={(e) => setSkillId(e.target.value)}
+                        disabled={loading}
+                        className="max-w-44 rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                        <option value="">技能：不使用</option>
+                        {skillOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                                {o.name}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        aria-label="附加 MCP 工具"
+                        value={mcpToolId}
+                        onChange={(e) => setMcpToolId(e.target.value)}
+                        disabled={loading}
+                        className="max-w-44 rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                        <option value="">MCP 工具：不使用</option>
+                        {mcpOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                                {o.name}
+                            </option>
+                        ))}
+                    </select>
+                    <span className="text-xs text-muted-foreground">
+                        选中技能/工具会随提问注入 LLM 合成
+                    </span>
+                </div>
+
                 <div className="flex items-end gap-2">
                     <Textarea
                         value={input}
@@ -162,7 +261,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                     </div>
                 )}
                 {!isUser && (message.provider || message.disabled) && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Badge
                             className={
                                 message.disabled
@@ -174,6 +273,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                                 ? "降级响应"
                                 : (message.provider ?? "llamaindex")}
                         </Badge>
+                        {message.enhancement?.skillName && (
+                            <Badge className="border-teal-500/60 text-teal-700 dark:text-teal-300">
+                                技能：{message.enhancement.skillName}
+                            </Badge>
+                        )}
+                        {message.enhancement?.mcpName && (
+                            <Badge className="border-fuchsia-500/60 text-fuchsia-700 dark:text-fuchsia-300">
+                                工具：{message.enhancement.mcpName}
+                            </Badge>
+                        )}
+                        {message.enhancement?.warning && (
+                            <span className="text-xs text-amber-600 dark:text-amber-400">
+                                {message.enhancement.warning}
+                            </span>
+                        )}
                     </div>
                 )}
                 {!isUser && message.sources && message.sources.length > 0 && (

@@ -75,6 +75,9 @@ export type SourceRef = z.infer<typeof SourceRefSchema>;
 export const QueryRequestSchema = z.object({
     query: z.string().min(1).max(4000),
     topK: z.number().int().min(1).max(50).default(5),
+    /** 可选附加能力：知识库合成时注入技能指令（skillId）或外部工具返回（mcpToolId） */
+    skillId: z.string().uuid().optional(),
+    mcpToolId: z.string().uuid().optional(),
 });
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
@@ -95,6 +98,14 @@ export const QueryResponseSchema = z.object({
     /** stub = 插件未启用时的降级响应；llamaindex = 真实检索管线（里程碑 2） */
     provider: z.enum(["stub", "llamaindex"]),
     disabled: z.boolean().default(false),
+    /** 附加能力应用情况（携带 skillId/mcpToolId 请求时返回） */
+    enhancement: z
+        .object({
+            skillName: z.string().nullable(),
+            mcpName: z.string().nullable(),
+            warning: z.string().nullable(),
+        })
+        .optional(),
 });
 export type QueryResponse = z.infer<typeof QueryResponseSchema>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     addEdge,
     applyEdgeChanges,
@@ -75,6 +75,22 @@ interface FlowNodeData extends Record<string, unknown> {
 
 type FlowNode = Node<FlowNodeData>;
 
+/** 校验 config._pos 是否为合法坐标（避免脏数据破坏画布） */
+function readPos(
+    config?: Record<string, unknown>,
+): { x: number; y: number } | null {
+    const pos = config?._pos;
+    if (
+        pos &&
+        typeof pos === "object" &&
+        typeof (pos as { x: unknown }).x === "number" &&
+        typeof (pos as { y: unknown }).y === "number"
+    ) {
+        return { x: (pos as { x: number }).x, y: (pos as { y: number }).y };
+    }
+    return null;
+}
+
 /** skill/mcp 节点的引用配置下拉数据源 */
 interface RefOption {
     kind: "skill" | "mcp";
@@ -83,14 +99,19 @@ interface RefOption {
     description: string | null;
 }
 
-/** WorkflowGraph ↔ React Flow 互转（画布位置不持久化） */
+/**
+ * WorkflowGraph ↔ React Flow 互转。位置：优先取节点保存过的拖动位置
+ * （config._pos，拖动结束时写入并随图持久化），否则自动网格排布。
+ */
 function graphToFlow(graph: WorkflowGraph): {
     nodes: FlowNode[];
     edges: Edge[];
 } {
     const nodes: FlowNode[] = graph.nodes.map((n, i) => ({
         id: n.id,
-        position: { x: (i % 3) * 240, y: Math.floor(i / 3) * 140 },
+        position:
+            readPos(n.config) ??
+            ({ x: (i % 3) * 240, y: Math.floor(i / 3) * 140 } as const),
         data: {
             label: n.label ?? TYPE_META[n.type].label,
             nodeType: n.type,
@@ -156,37 +177,75 @@ export function WorkflowCanvas({
     const [edges, setEdges] = useState<Edge[]>(() => graphToFlow(graph).edges);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+    // 新增 id 全局单调递增（不随外部 graph 重置，避免与已有节点 id 冲突）
     const [idCounter, setIdCounter] = useState(
         graph.nodes.length + graph.edges.length,
     );
+    // 最近一次同步到父级的 graph：props.graph 与之不同 → 外部加载/版本切换，
+    // 需要重建画布；相同 → 是我们自己 emit 的结果，保留内部状态（含拖动位置）
+    const lastEmittedRef = useRef(graph);
 
     const emit = useCallback(
         (nextNodes: FlowNode[], nextEdges: Edge[]) => {
-            onChange?.(flowToGraph(nextNodes, nextEdges));
+            const converted = flowToGraph(nextNodes, nextEdges);
+            lastEmittedRef.current = converted;
+            onChange?.(converted);
         },
         [onChange],
     );
 
-    const onNodesChange = useCallback(
-        (changes: NodeChange<FlowNode>[]) => {
+    // 外部 graph 变化（首次加载/查看历史版本）时重建画布；
+    // 自身 emit 的回流（graph === lastEmittedRef）不做处理
+    useEffect(() => {
+        if (graph === lastEmittedRef.current) return;
+        lastEmittedRef.current = graph;
+        const { nodes: ns, edges: es } = graphToFlow(graph);
+        setNodes(ns);
+        setEdges(es);
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+    }, [graph]);
+
+    /**
+     * 拖动（position change）高频触发：只本地更新 state 让 React Flow 跟随，
+     * 不同步父级（避免拖动中每帧触发父组件全树重渲染导致拖拽卡顿/回弹）；
+     * 拖动结束由 onNodeDragStop 统一落位并 emit。
+     */
+    const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
+        setNodes((prev) => applyNodeChanges(changes, prev) as FlowNode[]);
+    }, []);
+
+    const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
+        // 选中/拖动边不改变图结构，无需 emit（结构变化走 setEdgeCondition 等）
+        setEdges((prev) => applyEdgeChanges(changes, prev));
+    }, []);
+
+    /** 拖动结束：把最终位置写入 config._pos（随图持久化，重开后保持） */
+    const onNodeDragStop = useCallback(
+        (_: unknown, node: FlowNode) => {
             setNodes((prev) => {
-                const next = applyNodeChanges(changes, prev) as FlowNode[];
+                const next = prev.map((n) =>
+                    n.id === node.id
+                        ? {
+                              ...n,
+                              data: {
+                                  ...n.data,
+                                  config: {
+                                      ...(n.data.config ?? {}),
+                                      _pos: {
+                                          x: n.position.x,
+                                          y: n.position.y,
+                                      },
+                                  },
+                              },
+                          }
+                        : n,
+                );
                 emit(next, edges);
                 return next;
             });
         },
         [edges, emit],
-    );
-
-    const onEdgesChange = useCallback(
-        (changes: EdgeChange<Edge>[]) => {
-            setEdges((prev) => {
-                const next = applyEdgeChanges(changes, prev);
-                emit(nodes, next);
-                return next;
-            });
-        },
-        [nodes, emit],
     );
 
     const onConnect = useCallback(
@@ -419,6 +478,7 @@ export function WorkflowCanvas({
                         edges={edges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
+                        onNodeDragStop={onNodeDragStop}
                         onConnect={onConnect}
                         onNodeClick={(_, n) => {
                             setSelectedNodeId(n.id);

@@ -20,7 +20,7 @@ export default function RootLayout({
 
     return (
         <html lang="zh-CN">
-            <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+            <body className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
                 {/* 首帧前按 localStorage（无则系统偏好）加 .dark，避免暗色主题闪白 */}
                 <script
                     dangerouslySetInnerHTML={{
@@ -44,7 +44,20 @@ export default function RootLayout({
                         <UserMenu username={session.username} />
                     </header>
                 )}
-                {children}
+                <div className="flex-1">{children}</div>
+                {session && (
+                    <footer className="border-t px-6 py-4">
+                        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
+                            <p>
+                                © 2026 RAG 工作台 · 自托管工作流编排与知识库问答
+                            </p>
+                            <p>
+                                Hono + LangGraph.js + LlamaIndexTS + Qdrant +
+                                PostgreSQL
+                            </p>
+                        </div>
+                    </footer>
+                )}
             </body>
         </html>
     );
