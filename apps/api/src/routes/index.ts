@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../types.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import { mountAuth } from "./auth.js";
 import { mountHealth } from "./health.js";
 import { mountRetrieval } from "./retrieval.js";
 import { mountWorkflows } from "./workflows.js";
@@ -11,5 +12,7 @@ import { mountWorkflows } from "./workflows.js";
  * 注意：不要给返回类型加注解（会擦除累积的 Schema，AppType 将退化为 BlankSchema）。
  */
 export function mountRoutes(app: Hono<AppEnv>, registry: PluginRegistry) {
-    return mountRetrieval(mountWorkflows(mountHealth(app, registry)));
+    return mountRetrieval(
+        mountWorkflows(mountAuth(mountHealth(app, registry))),
+    );
 }

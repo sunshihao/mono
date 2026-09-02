@@ -593,6 +593,9 @@ video {
 .max-w-\[85\%\] {
   max-width: 85%;
 }
+.max-w-sm {
+  max-width: 24rem;
+}
 .flex-col {
   flex-direction: column;
 }
@@ -681,6 +684,9 @@ video {
 }
 .border-2 {
   border-width: 2px;
+}
+.border-b {
+  border-bottom-width: 1px;
 }
 .border-amber-500 {
   --tw-border-opacity: 1;
@@ -776,6 +782,14 @@ video {
 .py-2 {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
+}
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
 }
 .pt-0 {
   padding-top: 0px;

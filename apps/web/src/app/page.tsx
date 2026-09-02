@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { WorkflowDto } from "@repo/types";
 import { api } from "@/lib/api";
+import { getSession } from "@/lib/auth";
 import { sampleWorkflows } from "@/lib/fixtures";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,6 +35,10 @@ async function loadWorkflows(): Promise<WorkflowList> {
 }
 
 export default async function HomePage() {
+    // 登录守卫：未登录一律重定向到 /login（redirect 抛异常中断渲染，勿包 try/catch）
+    const session = getSession();
+    if (!session) redirect("/login");
+
     const { workflows, unavailable } = await loadWorkflows();
 
     return (

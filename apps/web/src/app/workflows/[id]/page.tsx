@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { WorkflowDto } from "@repo/types";
 import { api } from "@/lib/api";
+import { getSession } from "@/lib/auth";
 import { sampleWorkflows } from "@/lib/fixtures";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,10 @@ export default async function WorkflowPage({
 }: {
     params: { id: string };
 }) {
+    // 登录守卫：未登录一律重定向到 /login（redirect 抛异常中断渲染，勿包 try/catch）
+    const session = getSession();
+    if (!session) redirect("/login");
+
     const loaded = await load(params.id);
     if (!loaded) {
         return (

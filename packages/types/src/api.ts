@@ -124,3 +124,19 @@ export const ErrorDtoSchema = z.object({
     issues: z.array(z.unknown()).optional(),
 });
 export type ErrorDto = z.infer<typeof ErrorDtoSchema>;
+
+/** POST /v1/auth/login —— 登录请求体（密码 scrypt 哈希校验） */
+export const LoginRequestSchema = z.object({
+    username: z.string().trim().min(1).max(64),
+    password: z.string().min(1).max(128),
+});
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+/** POST /v1/auth/login —— 登录成功响应 */
+export const LoginResponseDtoSchema = z.object({
+    user: z.object({
+        id: z.number().int().positive(),
+        username: z.string(),
+    }),
+});
+export type LoginResponseDto = z.infer<typeof LoginResponseDtoSchema>;
