@@ -2,15 +2,15 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import {
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+    Input,
+} from "@/components/ui";
 
 /** 登录表单：提交到 /api/auth/login（服务端转发 Hono API 并签发会话 cookie） */
 export function LoginForm() {
@@ -94,10 +94,7 @@ export function LoginForm() {
                         />
                     </div>
                     {error && (
-                        <p
-                            role="alert"
-                            className="text-sm text-destructive"
-                        >
+                        <p role="alert" className="text-sm text-destructive">
                             {error}
                         </p>
                     )}

@@ -3,15 +3,15 @@
 import { useState } from "react";
 import type { AgentMessage, WorkflowGraph } from "@repo/types";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import {
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+    Input,
+} from "@/components/ui";
 
 interface RunPanelProps {
     workflowId: string;
@@ -40,7 +40,10 @@ export function WorkflowRunPanel({ workflowId, dirty = false }: RunPanelProps) {
         try {
             const res = await api.v1.workflows[":id"].run.$post({
                 param: { id: workflowId },
-                json: { query, ...(history.length > 0 ? { messages: history } : {}) },
+                json: {
+                    query,
+                    ...(history.length > 0 ? { messages: history } : {}),
+                },
             });
             if (!res.ok) {
                 setError(`执行失败（HTTP ${res.status}）`);
@@ -60,7 +63,8 @@ export function WorkflowRunPanel({ workflowId, dirty = false }: RunPanelProps) {
             <CardHeader>
                 <CardTitle>运行工作流</CardTitle>
                 <CardDescription>
-                    多轮会话：每轮携带完整消息历史重放执行（MemorySaver checkpointer）
+                    多轮会话：每轮携带完整消息历史重放执行（MemorySaver
+                    checkpointer）
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

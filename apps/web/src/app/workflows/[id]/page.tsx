@@ -4,8 +4,7 @@ import type { WorkflowDto } from "@repo/types";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { sampleWorkflows } from "@/lib/fixtures";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge, Button } from "@/components/ui";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { WorkflowEditor } from "@/components/workflow-editor";
 

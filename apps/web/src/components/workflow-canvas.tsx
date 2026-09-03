@@ -18,9 +18,13 @@ import "@xyflow/react/dist/style.css";
 import type { WorkflowGraph, WorkflowNodeType } from "@repo/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge, Button, Input, Option, Select } from "@/components/ui";
+
+/**
+ * 画布例外说明：画布本体/节点/连线（@xyflow/react 的 ReactFlow/Background/Controls、
+ * 节点 className 与 TYPE_META 色板）为画布专用直写样式，不走 MTW；
+ * 周围工具区（toolbar/属性面板/引用下拉）走 @/components/ui 收拢层（内部 MTW）。
+ */
 
 export const NODE_TYPES: WorkflowNodeType[] = [
     "start",
@@ -601,33 +605,32 @@ function RefSelect({
     const kindOptions = options.filter((o) => o.kind === nodeType);
     const kindLabel = nodeType === "skill" ? "技能" : "MCP 工具";
     return (
-        <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground">
-                引用{kindLabel}
-            </span>
-            <select
+        <div className="space-y-1">
+            <Select
+                label={`引用${kindLabel}`}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onChange={(v) => onChange(v ?? "")}
+                className="w-full text-sm"
+                containerClassName="w-full"
             >
-                <option value="">
+                <Option value="">
                     {kindOptions.length === 0
                         ? "未配置（先在设置页添加）"
                         : "未选择"}
-                </option>
+                </Option>
                 {kindOptions.map((o) => (
-                    <option key={o.id} value={o.id}>
+                    <Option key={o.id} value={o.id}>
                         {o.name}
                         {o.description ? ` — ${o.description}` : ""}
-                    </option>
+                    </Option>
                 ))}
-            </select>
+            </Select>
             {error && <p className="text-xs text-destructive">{error}</p>}
             <p className="text-xs text-muted-foreground">
                 {nodeType === "skill"
                     ? "执行时以提示词技能注入 LLM"
                     : "执行时调用注册的 HTTP 端点（{query} 替换为问题）"}
             </p>
-        </label>
+        </div>
     );
 }

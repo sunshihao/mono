@@ -1,11 +1,11 @@
-import { Badge } from "@/components/ui/badge";
 import {
+    Badge,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui";
 import { SettingsNav } from "@/components/settings-nav";
 import { SkillManager } from "@/components/skill-manager";
 import { McpToolManager } from "@/components/mcp-tool-manager";

@@ -4,16 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import type { QueryResponse, SourceRef } from "@repo/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
+    Badge,
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+    Option,
+    Select,
+    Spinner,
+    Textarea,
+} from "@/components/ui";
 import ReactMarkdown from "react-markdown";
 
 interface ChatMessage {
@@ -169,7 +172,7 @@ export function RetrievalPanel() {
                     {loading && (
                         <div className="flex justify-start">
                             <div className="flex max-w-[80%] items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
-                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+                                <Spinner className="h-3.5 w-3.5" />
                                 正在检索…
                             </div>
                         </div>
@@ -182,34 +185,34 @@ export function RetrievalPanel() {
 
                 {/* 附加能力工具行（输入框左上角）：可选技能 / MCP 工具带入请求 */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <select
-                        aria-label="附加技能"
+                    <Select
+                        label="附加技能"
                         value={skillId}
-                        onChange={(e) => setSkillId(e.target.value)}
+                        onChange={(v) => setSkillId(v ?? "")}
                         disabled={loading}
-                        className="max-w-44 rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        containerClassName="w-auto min-w-0"
                     >
-                        <option value="">技能：不使用</option>
+                        <Option value="">技能：不使用</Option>
                         {skillOptions.map((o) => (
-                            <option key={o.id} value={o.id}>
+                            <Option key={o.id} value={o.id}>
                                 {o.name}
-                            </option>
+                            </Option>
                         ))}
-                    </select>
-                    <select
-                        aria-label="附加 MCP 工具"
+                    </Select>
+                    <Select
+                        label="附加 MCP 工具"
                         value={mcpToolId}
-                        onChange={(e) => setMcpToolId(e.target.value)}
+                        onChange={(v) => setMcpToolId(v ?? "")}
                         disabled={loading}
-                        className="max-w-44 rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        containerClassName="w-auto min-w-0"
                     >
-                        <option value="">MCP 工具：不使用</option>
+                        <Option value="">MCP 工具：不使用</Option>
                         {mcpOptions.map((o) => (
-                            <option key={o.id} value={o.id}>
+                            <Option key={o.id} value={o.id}>
                                 {o.name}
-                            </option>
+                            </Option>
                         ))}
-                    </select>
+                    </Select>
                     <span className="text-xs text-muted-foreground">
                         选中技能/工具会随提问注入 LLM 合成
                     </span>
@@ -242,7 +245,8 @@ export function RetrievalPanel() {
     );
 }
 
-/** 单条聊天气泡：user 右对齐主色，assistant 左对齐卡片色 + markdown + 来源 */
+/** 单条聊天气泡：user 右对齐主色，assistant 左对齐卡片色 + markdown + 来源。
+ *  气泡/来源列表/markdown 为内容排版（例外区域），保持原生 markup，不走 MTW。 */
 function MessageBubble({ message }: { message: ChatMessage }) {
     const isUser = message.role === "user";
     return (

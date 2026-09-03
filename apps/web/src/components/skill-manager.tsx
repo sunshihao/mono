@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SkillDto } from "@repo/types";
 import { api } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge, Button, Input, Textarea } from "@/components/ui";
 
 /**
  * 设置页「技能」：提示词型技能的增删改/启停。
@@ -136,12 +133,11 @@ export function SkillManager() {
                     </li>
                 )}
                 {items.map((s) => (
-                    <li
-                        key={s.id}
-                        className="space-y-1 rounded-md border p-3"
-                    >
+                    <li key={s.id} className="space-y-1 rounded-md border p-3">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{s.name}</span>
+                            <span className="text-sm font-medium">
+                                {s.name}
+                            </span>
                             <Badge
                                 className={
                                     s.enabled

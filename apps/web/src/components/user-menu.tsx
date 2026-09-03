@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Menu, MenuHandler, MenuList, MenuItem } from "@/components/ui";
 
 type Theme = "light" | "dark";
 
@@ -25,48 +26,22 @@ function applyTheme(theme: Theme) {
 
 /**
  * 用户区（header 左侧）：头像（用户名首字母）+ 用户名；
- * hover 弹出菜单：主题调整（二级选择明/暗）+ 退出登录。
+ * 点击展开 ui/Menu（MTW Menu）——浅色/暗色切换 + 退出登录。
+ * 注：头像为文字/排版内容（MTW Avatar 为纯 <img> 组件），保持原生 span。
  */
 export function UserMenu({ username }: { username: string }) {
     const router = useRouter();
-    const [open, setOpen] = useState(false);
     // 初始浅色；挂载后（hydration 完成、html 的 .dark 类已由 inline script 设置）
     // 同步真实主题 —— useState initializer 在 SSR 也会执行，不能在那里读 document
     const [theme, setTheme] = useState<Theme>("light");
-    const [themeOpen, setThemeOpen] = useState(false);
-    // 关闭缓冲：按钮与弹窗之间的空隙（mt-2）不属任何元素，
-    // 鼠标跨越瞬间会触发 onMouseLeave —— 延迟关闭，进入弹窗即取消
-    const closeTimer = useRef<number | null>(null);
 
     useEffect(() => {
         setTheme(currentTheme());
     }, []);
 
-    function cancelClose() {
-        if (closeTimer.current !== null) {
-            window.clearTimeout(closeTimer.current);
-            closeTimer.current = null;
-        }
-    }
-
-    function scheduleClose() {
-        cancelClose();
-        closeTimer.current = window.setTimeout(() => {
-            setOpen(false);
-            setThemeOpen(false);
-        }, 200);
-    }
-
-    function close() {
-        cancelClose();
-        setOpen(false);
-        setThemeOpen(false);
-    }
-
     function handleThemePick(next: Theme) {
         setTheme(next);
         applyTheme(next);
-        close();
     }
 
     async function handleLogout() {
@@ -76,95 +51,53 @@ export function UserMenu({ username }: { username: string }) {
     }
 
     return (
-        <div
-            className="relative"
-            onMouseEnter={() => {
-                cancelClose();
-                setOpen(true);
-            }}
-            onMouseLeave={scheduleClose}
-        >
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
-                aria-haspopup="menu"
-                aria-expanded={open}
-            >
-                <span
-                    aria-hidden
-                    className="flex h-8 w-8 select-none items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground"
+        <Menu placement="bottom-end">
+            <MenuHandler>
+                <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+                    aria-label={`用户菜单（${username}）`}
                 >
-                    {username.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                    {username}
-                </span>
-            </button>
-
-            {open && (
-                <div
-                    role="menu"
-                    className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border bg-card p-1 text-sm shadow-md"
-                >
-                    {/* 主题调整：hover 展开明/暗二级菜单 */}
-                    <div className="relative">
-                        <button
-                            type="button"
-                            role="menuitem"
-                            onMouseEnter={() => setThemeOpen(true)}
-                            className="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-accent"
-                        >
-                            <span>主题调整</span>
-                            <span className="text-xs text-muted-foreground">
-                                {theme === "dark" ? "暗色" : "浅色"} ›
-                            </span>
-                        </button>
-                        {themeOpen && (
-                            <div
-                                role="menu"
-                                className="absolute right-full top-0 mr-1 w-36 rounded-md border bg-card p-1 shadow-md"
-                            >
-                                <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => handleThemePick("light")}
-                                    className="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-accent"
-                                >
-                                    浅色
-                                    {theme === "light" && (
-                                        <span className="text-xs text-muted-foreground">
-                                            ✓
-                                        </span>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => handleThemePick("dark")}
-                                    className="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-accent"
-                                >
-                                    暗色
-                                    {theme === "dark" && (
-                                        <span className="text-xs text-muted-foreground">
-                                            ✓
-                                        </span>
-                                    )}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    <div className="my-1 h-px bg-border" />
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleLogout}
-                        className="w-full rounded px-3 py-2 text-left text-destructive hover:bg-destructive/10"
+                    <span
+                        aria-hidden
+                        className="flex h-8 w-8 select-none items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground"
                     >
-                        退出登录
-                    </button>
-                </div>
-            )}
-        </div>
+                        {username.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                        {username}
+                    </span>
+                </button>
+            </MenuHandler>
+            <MenuList className="w-48 min-w-0 border border-border bg-card p-1 text-sm shadow-md">
+                <p className="px-3 py-1.5 text-xs text-muted-foreground">
+                    主题调整
+                </p>
+                <MenuItem
+                    onClick={() => handleThemePick("light")}
+                    className="flex w-full items-center justify-between"
+                >
+                    浅色
+                    {theme === "light" && (
+                        <span className="text-xs text-muted-foreground">✓</span>
+                    )}
+                </MenuItem>
+                <MenuItem
+                    onClick={() => handleThemePick("dark")}
+                    className="flex w-full items-center justify-between"
+                >
+                    暗色
+                    {theme === "dark" && (
+                        <span className="text-xs text-muted-foreground">✓</span>
+                    )}
+                </MenuItem>
+                <MenuItem
+                    onClick={() => void handleLogout()}
+                    className="flex w-full items-center justify-between text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
+                >
+                    退出登录
+                </MenuItem>
+            </MenuList>
+        </Menu>
     );
 }

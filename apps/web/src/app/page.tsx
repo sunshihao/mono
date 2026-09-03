@@ -4,14 +4,14 @@ import type { WorkflowDto } from "@repo/types";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { sampleWorkflows } from "@/lib/fixtures";
-import { Badge } from "@/components/ui/badge";
 import {
+    Badge,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui";
 import { HomeTabs } from "@/components/home-tabs";
 import { RetrievalPanel } from "@/components/retrieval-panel";
 import { SettingsPanel } from "@/components/settings-panel";

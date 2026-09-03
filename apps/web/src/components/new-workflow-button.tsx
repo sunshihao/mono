@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui";
 
 /** 新建工作流：POST 最小 start→end 图 → 跳转编辑页 */
 export function NewWorkflowButton() {

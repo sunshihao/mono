@@ -7,9 +7,7 @@ import type {
     WorkflowVersionDto,
 } from "@repo/types";
 import { api } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge, Button, Input } from "@/components/ui";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { WorkflowRunPanel } from "@/components/workflow-run-panel";
 

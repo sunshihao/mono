@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { McpToolDto } from "@repo/types";
 import { api } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge, Button, Input, Option, Select } from "@/components/ui";
 
 /**
  * 设置页「MCP」：外部工具端点的注册/启停。
@@ -114,17 +112,17 @@ export function McpToolManager() {
                         onChange={(e) => setDescription(e.target.value)}
                     />
                     <div className="flex gap-2">
-                        <select
-                        aria-label="HTTP 方法"
+                        <Select
+                            label="HTTP 方法"
                             value={method}
-                            onChange={(e) =>
-                                setMethod(e.target.value as "GET" | "POST")
+                            onChange={(v) =>
+                                setMethod((v as "GET" | "POST") ?? "GET")
                             }
-                            className="rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            containerClassName="w-auto min-w-0"
                         >
-                            <option value="GET">GET</option>
-                            <option value="POST">POST</option>
-                        </select>
+                            <Option value="GET">GET</Option>
+                            <Option value="POST">POST</Option>
+                        </Select>
                         <Input
                             placeholder="URL（{query} 会被替换为用户问题，例如 https://api.example.com/search?q={query}）"
                             value={url}
@@ -146,16 +144,16 @@ export function McpToolManager() {
                 {items.length === 0 && (
                     <li className="rounded-md border p-3 text-xs text-muted-foreground">
                         还没有工具。注册后即可在工作流画布中用「MCP」节点引用
-                        （rag-workbench 的 4 个工具即 HTTP 端点形态，见下方说明）。
+                        （rag-workbench 的 4 个工具即 HTTP
+                        端点形态，见下方说明）。
                     </li>
                 )}
                 {items.map((t) => (
-                    <li
-                        key={t.id}
-                        className="space-y-1 rounded-md border p-3"
-                    >
+                    <li key={t.id} className="space-y-1 rounded-md border p-3">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{t.name}</span>
+                            <span className="text-sm font-medium">
+                                {t.name}
+                            </span>
                             <Badge className="border-muted font-mono text-muted-foreground">
                                 {t.method}
                             </Badge>

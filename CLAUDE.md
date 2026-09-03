@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `packages/types`（`@repo/types`）— 共享 zod schema/类型：workflow 图、API DTO（含 RunRequest/Update/Version）、AgentState、ingestion 信封、RAG 常量（对齐 ../RAG）。zod schema 是唯一事实源。
 - `apps/ingestion`（`@repo/ingestion`）— 独立 Node 进程（非 Edge）：**生产侧** chokidar v5 监听 + Hono webhook + 定时轮询 hash 比对，统一 XADD 到 `ingestion:events` Stream；**消费侧**（REDIS_URL + QDRANT_URL + OPENAI_API_KEY 齐备时启动）Consumer Group 消费 → 切分（512/50）→ 批量嵌入 → Qdrant upsert（同 doc_hash 先删后写幂等）。端口 3002。
 - `apps/data`（`@repo/data`）— **多 Git 仓库 → 多向量库增量同步系统**（设计蓝图见该目录 README 与根目录 `apps/data` 设计说明）。`sync.config.yaml`（env:VAR 注入）为仓库↔collection 映射唯一真源；每仓库一条 Redis Stream（`data-sync:<repo>`）+ SET NX 消费租约（per-repo FIFO + 水平扩展）。webhook（3003，HMAC 每仓库 secret）→ worker → `git diff <state.sha|空树> <after>`（A/M/D/R 分类）→ 切块（auto/markdown/code/fixed）→ DashScope 嵌入 → Qdrant upsert（point id = sha256(repo:file_path:chunk_index) 转 UUID，幂等；M 差集删除、R 向量搬运）。state（`.sync-state/<repo>.state.json`）仅在全部写成功后推进；失败经 ZSET 延迟队列指数退避重试 → DLQ 流；reconcile 定时对账兜底。CLI：`sync/backfill/cleanup/status/config-check/reconcile/worker/webhook/serve`（`--dry-run` 全链路预览）。仅接 `repos/chinese-buy-us-stock-guide`（AIGC-Interview-Book 暂缓）。
-- `apps/web`（`@repo/web`）— Next.js 14.2.35 + @xyflow/react + 手工 shadcn 风格组件。`/` 工作流列表 + 新建入口；`/workflows/[id]` **可编辑画布**（增删 5 类节点/连线/router 条件边/重命名）→ 保存（PUT）→ 版本历史浏览 + **多轮运行面板**（携带 messages 重放）；检索面板（真实管线）。端口 3001。
+- `apps/web`（`@repo/web`）— Next.js 14.2.35 + @xyflow/react + @material-tailwind/react（经 `@/components/ui` 收拢层使用，见 Conventions）。`/` 工作流列表 + 新建入口；`/workflows/[id]` **可编辑画布**（增删 5 类节点/连线/router 条件边/重命名）→ 保存（PUT）→ 版本历史浏览 + **多轮运行面板**（携带 messages 重放）；检索面板（真实管线）。端口 3001。
 - **远程基础设施**（凭据在根 `.env` 与各 app `.env`，均已 gitignore）：PG `115.190.209.1:5433/myappdb`（自签证书需 `sslmode=no-verify`，drizzle 表已 push）、Redis `115.190.209.1:6380`（密码含逗号）、Qdrant `115.190.209.1:6333`（明文 HTTP 带 token）、DashScope。
 
 ## Commands
@@ -34,6 +34,7 @@ pnpm lint         # eslint（flat config，根 eslint.config.js）
 ## Conventions / gotchas
 
 - **ESM NodeNext**：Node 侧（api/ingestion/types）相对导入必须带 `.js` 后缀；`pg` 是 CJS，用 `import pg from "pg"` 取 `Pool`。web 用 bundler resolution（不继承 NodeNext base）。
+- **web UI 一律走 `@/components/ui` 收拢层（内部实现为 @material-tailwind/react 2.1.10）**：`components/ui/` 是唯一允许直接 import `@material-tailwind/react` 的目录，页面/组件从 `components/ui/index.ts` barrel 拿组件（后续全局换肤/换色只改 ui 层）。包装文件均 `"use client"`、样式收敛回 CSS 变量 token（随 .dark）；已知 MTW d.ts 与 @types/react 存在 DOM props 快照缺位，包装内以 `as unknown as React.FC<自定义props>` 边界 cast（见 ui/button.tsx）。例外（原生 markup）：@xyflow/react 画布节点、聊天气泡/markdown、标题正文排版、logo/页脚。
 - **zod 全仓钉 v3**：LlamaIndexTS peer 要求 v3，且 zod v4 与 @repo/types 的 v3 schema 混用会在运行时崩溃——新包 `pnpm add zod` 默认装 v4，必须 `zod@^3`。TS 钉 5.x（typescript-eslint peer `<6.1`）。
 - **OTel 启动顺序**：`apps/api/src/index.ts` 第一行必须 `import "./telemetry/init.js"`——ESM import 提升会让被插桩模块在 SDK 之前加载。
 - **AppType / hono-client 类型链**（改动路由时务必遵守，详见 routes/*.ts 注释）：
