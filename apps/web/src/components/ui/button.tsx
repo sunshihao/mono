@@ -14,19 +14,6 @@ import { cn } from "@/lib/cn";
  * → MTW filled|outlined|text；默认颜色收敛回 CSS 变量 token（随 .dark 明暗主题），
  * MTW 自带的彩色/大写/大圆角视觉已在下方 className 中压平。
  */
-
-/** MTW d.ts 的 DOM props 快照与当前 @types/react 存在缺位键差异（若干事件/属性键被
- *  视作必填），在收拢边界统一放宽为标准元素 props —— 对外仍由下方 ButtonProps 把关。 */
-type MTButtonLike = React.FC<
-    React.ButtonHTMLAttributes<HTMLButtonElement> & {
-        variant?: string;
-        size?: string;
-        ripple?: boolean;
-        loading?: boolean;
-    }
->;
-const Btn = MTButton as unknown as MTButtonLike;
-
 const MTW_VARIANT = {
     default: "filled",
     outline: "outlined",
@@ -59,7 +46,7 @@ export function Button({
     ...props
 }: ButtonProps) {
     return (
-        <Btn
+        <MTButton
             variant={MTW_VARIANT[variant]}
             size="md"
             ripple

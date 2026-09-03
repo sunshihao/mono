@@ -34,16 +34,10 @@ export function Textarea({
 }: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "size">) {
     return (
         <MtTextarea
-            variant="outlined"
+            variant="static"
             size="md"
             resize
-            className={cn(
-                "rounded-md px-3 text-sm text-foreground",
-                "border-input placeholder-shown:border-input focus:border-ring",
-                "placeholder:text-muted-foreground placeholder:opacity-100",
-                "bg-transparent disabled:bg-transparent",
-                className,
-            )}
+            className={cn(className)}
             {...props}
         />
     );

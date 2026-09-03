@@ -40,15 +40,9 @@ export function Input({
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">) {
     return (
         <MtInput
-            variant="outlined"
+            variant="static"
             size="md"
-            className={cn(
-                "h-9 rounded-md px-3 text-sm text-foreground",
-                "border-input placeholder-shown:border-input focus:border-ring",
-                "placeholder:text-muted-foreground placeholder:opacity-100",
-                "bg-transparent disabled:bg-transparent",
-                className,
-            )}
+            className={cn(className)}
             {...props}
         />
     );
