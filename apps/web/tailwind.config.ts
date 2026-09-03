@@ -1,9 +1,14 @@
-import type { Config } from "tailwindcss";
+import withMT from "@material-tailwind/react/utils/withMT";
 
 /** shadcn/ui 风格：颜色走 globals.css 的 CSS 变量（HSL 三元组） */
-const config: Config = {
+const config = {
     darkMode: "class",
-    content: ["./src/**/*.{ts,tsx}"],
+    content: [
+        "./src/**/*.{ts,tsx}",
+        // Material Tailwind 组件与其主题均按类名生成样式，需纳入扫描
+        "./node_modules/@material-tailwind/react/components/**/*.{js,ts,jsx,tsx}",
+        "./node_modules/@material-tailwind/react/theme/components/**/*.{js,ts,jsx,tsx}",
+    ],
     theme: {
         extend: {
             colors: {
@@ -46,4 +51,6 @@ const config: Config = {
     },
     plugins: [],
 };
-export default config;
+
+// withMT：深合并 Material Tailwind 主题（其默认色板与上方 shadcn token 键名不冲突，共存）
+export default withMT(config);
