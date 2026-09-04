@@ -13,7 +13,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
 ];
 
 /**
- * 设置页双栏骨架：左侧竖向导航（ui/TabBar vertical，MTW Tabs 实现），右侧渲染对应内容。
+ * 设置页双栏骨架：左侧竖向导航（ui/TabBar orientation="vertical"，MTW Tabs 实现），右侧渲染对应内容。
  * 各面板全部渲染、非激活项仅 hidden —— 切走再切回不丢表单状态
  * （MTW TabPanel 会卸载非激活面板故不用）。内容由 server 渲染后传入。
  */
@@ -40,7 +40,7 @@ export function SettingsNav({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
             <div className="w-full shrink-0 lg:w-44">
                 <TabBar
-                    vertical
+                    orientation="vertical"
                     items={SECTIONS}
                     value={active}
                     onChange={(k) => setActive(k as SectionKey)}

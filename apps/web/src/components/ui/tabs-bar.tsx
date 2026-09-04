@@ -55,8 +55,8 @@ export interface TabBarProps {
     items: TabItem[];
     value: string;
     onChange: (key: string) => void;
-    /** 竖向排列（设置页左侧导航形态） */
-    vertical?: boolean;
+    /** 竖向排列（设置页左侧导航形态）；不传默认 horizontal（MTW 侧兜底） */
+    orientation?: "horizontal" | "vertical";
     className?: string;
 }
 
@@ -68,16 +68,22 @@ export function TabBar({
     items,
     value,
     onChange,
-    vertical,
+    orientation,
     className,
 }: TabBarProps) {
     return (
-        <TabsComp value={value} className="w-full inline-flex overflow-visible">
+        // MTW TabsHeader 的 nav 壳层不吃 className（className 全落到内部 ul），
+        // 且本层是 inline-flex —— 行向 flex 子项按内容收缩，ul 的 w-full 只相对 nav 生效，
+        // 故用任意变体把 nav 撑满，否则竖向设置导航的背景条只包住文字宽度。
+        <TabsComp
+            value={value}
+            orientation={orientation}
+            className="w-full inline-flex overflow-visible [&>nav]:w-full"
+        >
             <TabsHeaderComp
                 indicatorProps={{ className: "hidden" }}
                 className={cn(
                     "w-full inline-flex gap-1 rounded-lg border border-border bg-muted/50 p-1",
-                    vertical && "flex-col",
                     className,
                 )}
             >
