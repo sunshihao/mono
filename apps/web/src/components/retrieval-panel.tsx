@@ -12,8 +12,10 @@ import {
     CardDescription,
     CardHeader,
     CardTitle,
-    Option,
-    Select,
+    Menu,
+    MenuHandler,
+    MenuItem,
+    MenuList,
     Spinner,
     Textarea,
 } from "@/components/ui";
@@ -139,12 +141,22 @@ export function RetrievalPanel() {
         }
     }
 
+    // 已挂载的附加能力摘要（按钮文案：可同时挂技能与工具）
+    const skillName = skillOptions.find((o) => o.id === skillId)?.name;
+    const mcpName = mcpOptions.find((o) => o.id === mcpToolId)?.name;
+    const activeSummary = [
+        skillName && `技能：${skillName}`,
+        mcpName && `工具：${mcpName}`,
+    ]
+        .filter(Boolean)
+        .join(" · ");
+
     return (
         <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
                 <div>
                     <CardTitle>知识库问答</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="mt-3">
                         text-embedding-v4 嵌入 → Qdrant 检索 → qwen-plus 合成
                     </CardDescription>
                 </div>
@@ -183,42 +195,79 @@ export function RetrievalPanel() {
                     <div ref={bottomRef} />
                 </div>
 
-                {/* 附加能力工具行（输入框左上角）：可选技能 / MCP 工具带入请求 */}
+                {/* 附加能力入口：技能 / MCP 工具合并为一个 Menu（分组选择，可同时挂载；
+                 * 再次点击已选项取消。选中项随请求携带 skillId/mcpToolId 由 API 合成阶段注入） */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <Select
-                        label="附加技能"
-                        value={skillId}
-                        onChange={(v) => setSkillId(v ?? "")}
-                        disabled={loading}
-                        containerClassName="w-auto min-w-0"
-                    >
-                        <Option value="">技能：不使用</Option>
-                        {skillOptions.map((o) => (
-                            <Option key={o.id} value={o.id}>
-                                {o.name}
-                            </Option>
-                        ))}
-                    </Select>
-                    <Select
-                        label="附加 MCP 工具"
-                        value={mcpToolId}
-                        onChange={(v) => setMcpToolId(v ?? "")}
-                        disabled={loading}
-                        containerClassName="w-auto min-w-0"
-                    >
-                        <Option value="">MCP 工具：不使用</Option>
-                        {mcpOptions.map((o) => (
-                            <Option key={o.id} value={o.id}>
-                                {o.name}
-                            </Option>
-                        ))}
-                    </Select>
+                    <Menu placement="bottom-start">
+                        <MenuHandler>
+                            <Button
+                                variant="outline"
+                                disabled={loading}
+                                aria-label="选择附加技能或 MCP 工具"
+                            >
+                                附加能力
+                                {activeSummary ? `：${activeSummary}` : ""}
+                            </Button>
+                        </MenuHandler>
+                        <MenuList className="w-64 overflow-y-auto">
+                            <p className="px-3 py-1.5 text-xs text-muted-foreground">
+                                技能（prompt 注入 LLM）
+                            </p>
+                            {skillOptions.length === 0 && (
+                                <p className="px-3 py-1 text-xs text-muted-foreground">
+                                    设置页暂无已启用技能
+                                </p>
+                            )}
+                            {skillOptions.map((o) => (
+                                <MenuItem
+                                    key={o.id}
+                                    onClick={() =>
+                                        setSkillId(skillId === o.id ? "" : o.id)
+                                    }
+                                    className="flex w-full items-center justify-between gap-2"
+                                >
+                                    {o.name}
+                                    {skillId === o.id && (
+                                        <span className="text-xs text-muted-foreground">
+                                            ✓
+                                        </span>
+                                    )}
+                                </MenuItem>
+                            ))}
+                            <p className="px-3 py-1.5 text-xs text-muted-foreground">
+                                MCP 工具（端点结果并入上下文）
+                            </p>
+                            {mcpOptions.length === 0 && (
+                                <p className="px-3 py-1 text-xs text-muted-foreground">
+                                    设置页暂无已注册工具
+                                </p>
+                            )}
+                            {mcpOptions.map((o) => (
+                                <MenuItem
+                                    key={o.id}
+                                    onClick={() =>
+                                        setMcpToolId(
+                                            mcpToolId === o.id ? "" : o.id,
+                                        )
+                                    }
+                                    className="flex w-full items-center justify-between gap-2"
+                                >
+                                    {o.name}
+                                    {mcpToolId === o.id && (
+                                        <span className="text-xs text-muted-foreground">
+                                            ✓
+                                        </span>
+                                    )}
+                                </MenuItem>
+                            ))}
+                        </MenuList>
+                    </Menu>
                     <span className="text-xs text-muted-foreground">
-                        选中技能/工具会随提问注入 LLM 合成
+                        技能/工具随提问注入 LLM 合成；
                     </span>
                 </div>
 
-                <div className="flex items-end gap-2">
+                <div className="flex gap-2">
                     <Textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -234,10 +283,11 @@ export function RetrievalPanel() {
                         disabled={loading}
                     />
                     <Button
+                        className="w-28"
                         onClick={() => void submit()}
                         disabled={loading || !input.trim()}
                     >
-                        {loading ? "检索中…" : "发送"}
+                        {loading ? "检索中…" : "检索"}
                     </Button>
                 </div>
             </CardContent>

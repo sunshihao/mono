@@ -70,7 +70,7 @@ export function Select({
             onChange={onChange}
             disabled={disabled}
             error={error}
-            variant="static"
+            variant="outlined"
             size="md"
             containerProps={
                 containerClassName

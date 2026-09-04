@@ -72,11 +72,11 @@ export function TabBar({
     className,
 }: TabBarProps) {
     return (
-        <TabsComp value={value} className="inline-flex overflow-visible">
+        <TabsComp value={value} className="w-full inline-flex overflow-visible">
             <TabsHeaderComp
                 indicatorProps={{ className: "hidden" }}
                 className={cn(
-                    "inline-flex gap-1 rounded-lg border border-border bg-muted/50 p-1",
+                    "w-full inline-flex gap-1 rounded-lg border border-border bg-muted/50 p-1",
                     vertical && "flex-col",
                     className,
                 )}

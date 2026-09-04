@@ -34,7 +34,7 @@ export function Textarea({
 }: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "size">) {
     return (
         <MtTextarea
-            variant="static"
+            variant="outlined"
             size="md"
             resize
             className={cn(className)}

@@ -100,16 +100,19 @@ export function SkillManager() {
                 <p className="mb-2 text-sm font-medium">添加技能</p>
                 <div className="space-y-2">
                     <Input
+                        label="名称"
                         placeholder="名称（例如：翻译成英文）"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                     />
                     <Input
+                        label="描述"
                         placeholder="描述（可选）"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                     />
                     <Textarea
+                        label="指令"
                         placeholder="指令（prompt）：技能的行为定义，作为 system 指令与用户问题一起交给 LLM"
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}

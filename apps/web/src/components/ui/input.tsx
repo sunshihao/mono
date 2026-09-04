@@ -40,7 +40,7 @@ export function Input({
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">) {
     return (
         <MtInput
-            variant="static"
+            variant="outlined"
             size="md"
             className={cn(className)}
             {...props}

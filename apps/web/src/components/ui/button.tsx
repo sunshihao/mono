@@ -13,7 +13,23 @@ import { cn } from "@/lib/cn";
  * 语义 API 保持旧 shadcn 风格：variant default|outline|ghost
  * → MTW filled|outlined|text；默认颜色收敛回 CSS 变量 token（随 .dark 明暗主题），
  * MTW 自带的彩色/大写/大圆角视觉已在下方 className 中压平。
+ *
+ * forwardRef：MTW MenuHandler 等组合件需要给子元素注入 ref（floating 定位），
+ * 故本包装转发 ref 到实际 button。
  */
+
+/** MTW d.ts 的 DOM props 快照与当前 @types/react 存在缺位键差异（若干事件/属性键被
+ *  视作必填），在收拢边界统一放宽为标准元素 props —— 对外仍由下方 ButtonProps 把关。 */
+type MTButtonLike = React.ForwardRefExoticComponent<
+    React.ButtonHTMLAttributes<HTMLButtonElement> & {
+        variant?: string;
+        size?: string;
+        ripple?: boolean;
+        loading?: boolean;
+    } & React.RefAttributes<HTMLButtonElement>
+>;
+const Btn = MTButton as unknown as MTButtonLike;
+
 const MTW_VARIANT = {
     default: "filled",
     outline: "outlined",
@@ -30,7 +46,7 @@ const variantClasses = {
 
 const sizeClasses = {
     default: "h-9 px-4 py-2 text-sm",
-    sm: "h-8 px-3 text-xs",
+    sm: "h-8 px-3 text-xs leading-1 py-1",
     lg: "h-10 px-8",
 };
 
@@ -39,26 +55,27 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     size?: keyof typeof sizeClasses;
 }
 
-export function Button({
-    className,
-    variant = "default",
-    size = "default",
-    ...props
-}: ButtonProps) {
-    return (
-        <MTButton
-            variant={MTW_VARIANT[variant]}
-            size="md"
-            ripple
-            className={cn(
-                // 压平 MTW 默认排版（大写/加粗）并恢复旧观感的圆角字号
-                "rounded-md font-medium normal-case tracking-normal",
-                "disabled:pointer-events-none disabled:opacity-50",
-                variantClasses[variant],
-                sizeClasses[size],
-                className,
-            )}
-            {...props}
-        />
-    );
-}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+    function Button(
+        { className, variant = "default", size = "default", ...props },
+        ref,
+    ) {
+        return (
+            <Btn
+                ref={ref}
+                variant={MTW_VARIANT[variant]}
+                size="md"
+                ripple
+                className={cn(
+                    // 压平 MTW 默认排版（大写/加粗）并恢复旧观感的圆角字号
+                    "rounded-md font-medium normal-case tracking-normal",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                    variantClasses[variant],
+                    sizeClasses[size],
+                    className,
+                )}
+                {...props}
+            />
+        );
+    },
+);
