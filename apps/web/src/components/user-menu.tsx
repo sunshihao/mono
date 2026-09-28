@@ -9,14 +9,14 @@ type Theme = "light" | "dark";
 const THEME_KEY = "theme";
 
 function currentTheme(): Theme {
-    // hydration 时 html 已由 layout 的 inline script 加好 .dark 类
-    return document.documentElement.classList.contains("dark")
+    // hydration 时 html 已由 layout 的 inline script 写好 data-theme
+    return document.documentElement.getAttribute("data-theme") === "dark"
         ? "dark"
         : "light";
 }
 
 function applyTheme(theme: Theme) {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.setAttribute("data-theme", theme);
     try {
         localStorage.setItem(THEME_KEY, theme);
     } catch {
@@ -26,12 +26,12 @@ function applyTheme(theme: Theme) {
 
 /**
  * 用户区（header 左侧）：头像（用户名首字母）+ 用户名；
- * 点击展开 ui/Menu（MTW Menu）——浅色/暗色切换 + 退出登录。
- * 注：头像为文字/排版内容（MTW Avatar 为纯 <img> 组件），保持原生 span。
+ * 点击展开 ui/Menu ——浅色/暗色切换 + 退出登录。
+ * 注：头像为纯排版内容，保持原生 span（daisyUI 的 avatar 需要 <img>）。
  */
 export function UserMenu({ username }: { username: string }) {
     const router = useRouter();
-    // 初始浅色；挂载后（hydration 完成、html 的 .dark 类已由 inline script 设置）
+    // 初始浅色；挂载后（hydration 完成、html 的 data-theme 已由 inline script 写入）
     // 同步真实主题 —— useState initializer 在 SSR 也会执行，不能在那里读 document
     const [theme, setTheme] = useState<Theme>("light");
 
@@ -55,7 +55,7 @@ export function UserMenu({ username }: { username: string }) {
             <MenuHandler>
                 <button
                     type="button"
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-base-200"
                     aria-label={`用户菜单（${username}）`}
                 >
                     <span

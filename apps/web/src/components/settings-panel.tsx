@@ -116,7 +116,7 @@ function McpGuideCard() {
                     先构建 MCP Server，再在 Claude Code
                     中注册（一次即可，长期有效）：
                 </p>
-                <pre className="overflow-x-auto rounded-lg border bg-muted p-4 text-xs">
+                <pre className="overflow-x-auto rounded-lg border border-base-300 bg-muted p-4 text-xs">
                     <code>{`pnpm --filter @repo/mcp build
 claude mcp add rag-workbench -- node <mono路径>/apps/mcp/dist/index.js`}</code>
                 </pre>
@@ -186,7 +186,7 @@ function ElementsCard() {
                     {NODE_ELEMENTS.map((el) => (
                         <li
                             key={el.type}
-                            className="flex items-start gap-3 rounded-md border p-3"
+                            className="flex items-start gap-3 rounded-md border border-base-300 p-3"
                         >
                             <Badge className="shrink-0 border-muted font-mono text-muted-foreground">
                                 {el.type}

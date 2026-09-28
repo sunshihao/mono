@@ -1,44 +1,36 @@
 "use client";
 
 import * as React from "react";
-import { Textarea as MTTextarea } from "@material-tailwind/react";
 import { cn } from "@/lib/cn";
 
 /**
- * Textarea —— @material-tailwind/react outlined Textarea 的收拢封装
- * （三态边框/占位符收敛见 input.tsx 注释，同一套 token）。
+ * Textarea —— daisyUI `textarea` 的收拢封装（描边/聚焦态同 input，随主题）。
+ * label 语义与 input.tsx 一致：传了就在上方渲染可见标签。
  */
+export interface TextareaProps extends Omit<
+    React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+    "size"
+> {
+    label?: string;
+}
 
-/** MTW d.ts 的 DOM props 快照差异（见 button.tsx 注释）在收拢边界放宽 */
-type MTTextareaLike = React.FC<
-    Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "size"> & {
-        variant?: string;
-        size?: "md" | "lg";
-        color?: string;
-        label?: string;
-        error?: boolean;
-        success?: boolean;
-        resize?: boolean;
-        icon?: React.ReactNode;
-        labelProps?: Record<string, unknown>;
-        containerProps?: Record<string, unknown>;
-        shrink?: boolean;
-        inputRef?: React.Ref<HTMLTextAreaElement>;
-    }
->;
-const MtTextarea = MTTextarea as unknown as MTTextareaLike;
-
-export function Textarea({
-    className,
-    ...props
-}: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "size">) {
-    return (
-        <MtTextarea
-            variant="outlined"
-            size="md"
-            resize
-            className={cn(className)}
+export function Textarea({ className, label, id, ...props }: TextareaProps) {
+    const field = (
+        <textarea
+            id={id}
+            className={cn("textarea w-full", className)}
             {...props}
         />
+    );
+
+    if (!label) return field;
+
+    return (
+        <label className="block w-full">
+            <span className="label w-full justify-start px-0 pb-1 text-xs text-muted-foreground">
+                {label}
+            </span>
+            {field}
+        </label>
     );
 }

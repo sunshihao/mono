@@ -91,7 +91,7 @@ export function WorkflowRunPanel({ workflowId, dirty = false }: RunPanelProps) {
                 )}
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 {messages.length > 0 && (
-                    <div className="max-h-96 space-y-3 overflow-y-auto rounded-md border p-4">
+                    <div className="max-h-96 space-y-3 overflow-y-auto rounded-md border border-base-300 p-4">
                         {messages.map((m, i) => (
                             <div
                                 key={i}

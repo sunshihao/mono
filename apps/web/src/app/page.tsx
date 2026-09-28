@@ -119,7 +119,7 @@ function WorkflowCard({
 }) {
     return (
         <Link href={`/workflows/${id}`}>
-            <Card className="h-full transition-colors hover:bg-accent/50">
+            <Card className="h-full transition-colors hover:bg-base-200/50">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between text-base">
                         {name}

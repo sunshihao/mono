@@ -98,15 +98,17 @@ export function McpToolManager() {
                 </Badge>
             </div>
 
-            <div className="rounded-md border p-3">
+            <div className="rounded-md border border-base-300 p-3">
                 <p className="mb-2 text-sm font-medium">注册工具端点</p>
                 <div className="space-y-2">
                     <Input
+                        label="名称"
                         placeholder="名称（例如：rag-workbench search_knowledge）"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                     />
                     <Input
+                        label="描述"
                         placeholder="描述（可选）"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -124,6 +126,7 @@ export function McpToolManager() {
                             <Option value="POST">POST</Option>
                         </Select>
                         <Input
+                            label="URL"
                             placeholder="URL（{query} 会被替换为用户问题，例如 https://api.example.com/search?q={query}）"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
@@ -142,14 +145,17 @@ export function McpToolManager() {
 
             <ul className="space-y-2">
                 {items.length === 0 && (
-                    <li className="rounded-md border p-3 text-xs text-muted-foreground">
+                    <li className="rounded-md border border-base-300 p-3 text-xs text-muted-foreground">
                         还没有工具。注册后即可在工作流画布中用「MCP」节点引用
                         （rag-workbench 的 4 个工具即 HTTP
                         端点形态，见下方说明）。
                     </li>
                 )}
                 {items.map((t) => (
-                    <li key={t.id} className="space-y-1 rounded-md border p-3">
+                    <li
+                        key={t.id}
+                        className="space-y-1 rounded-md border border-base-300 p-3"
+                    >
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">
                                 {t.name}

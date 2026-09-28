@@ -21,14 +21,15 @@ export default function RootLayout({
     return (
         <html lang="zh-CN">
             <body className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
-                {/* 首帧前按 localStorage（无则系统偏好）加 .dark，避免暗色主题闪白 */}
+                {/* 首帧前按 localStorage（无则系统偏好）写 data-theme，避免暗色主题闪白。
+                 * daisyUI 靠 data-theme 选主题，globals.css 的 dark: 变体也跟随该属性 */}
                 <script
                     dangerouslySetInnerHTML={{
-                        __html: `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`,
+                        __html: `try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)}catch(e){}`,
                     }}
                 />
                 {session && (
-                    <header className="flex items-center justify-between border-b px-6 py-3">
+                    <header className="flex items-center justify-between border-b border-base-300 px-6 py-3">
                         <Link href="/" className="flex items-center gap-2">
                             <span className="flex h-10 w-10 items-center justify-center rounded-sm rounded-r-lg bg-[#e5e7eb] p-1.5 shadow-sm dark:bg-neutral-800">
                                 <img
@@ -46,7 +47,7 @@ export default function RootLayout({
                 )}
                 <div className="flex-1">{children}</div>
                 {session && (
-                    <footer className="border-t px-6 py-4">
+                    <footer className="border-t border-base-300 px-6 py-4">
                         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
                             <p>
                                 © 2026 RAG 工作台 · 自托管工作流编排与知识库问答

@@ -1,69 +1,71 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
-}
-
-/* 暗色主题（手动切换）：layout 中 inline script 在首帧前按 localStorage/系统偏好
- * 给 <html> 加 .dark 类（默认浅色；React Flow 等组件颜色走变量自动适配） */
-.dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 5.9%;
-    --card-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+@import "tailwindcss" source("../");
+@plugin "daisyui" {
+    themes:
+        light --default,
+        dark;
 }
 
 /*
- * React Flow 画布主题适配：颜色一律走 shadcn CSS 变量（跟随明暗主题），
- * 覆盖 @xyflow/react 自带样式（其默认白底黑字在暗色背景下不可读）。
+ * 明暗主题：layout 首帧脚本给 <html> 写 data-theme="light|dark"（localStorage 优先，
+ * 无则系统偏好），user-menu 的切换按钮改写同一属性。
+ * 下方 custom-variant 让 Tailwind 的 dark: 变体跟随该属性（而非系统偏好），
+ * 这样页面里既有的 dark: 工具类与 daisyUI 主题色始终同步。
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * 旧 shadcn 语义 token → daisyUI 主题变量别名。
+ * 页面里 bg-background / text-muted-foreground / border-border 等工具类照旧可用，
+ * 具体色值由 daisyUI 的 light/dark 主题决定（换主题只改上面 @plugin 一行）。
+ *
+ * 注意：primary / secondary / accent / error 这几个名字 daisyUI 已经拥有（btn-primary
+ * 等组件类会读），此处不重复定义以免遮蔽；只补它没有的语义别名。
+ */
+@theme inline {
+    --color-background: var(--color-base-100);
+    --color-foreground: var(--color-base-content);
+
+    --color-card: var(--color-base-100);
+    --color-card-foreground: var(--color-base-content);
+
+    --color-muted: var(--color-base-200);
+    --color-muted-foreground: color-mix(
+        in oklab,
+        var(--color-base-content) 60%,
+        transparent
+    );
+
+    --color-primary-foreground: var(--color-primary-content);
+    --color-secondary-foreground: var(--color-secondary-content);
+    --color-accent-foreground: var(--color-base-content);
+
+    --color-destructive: var(--color-error);
+    --color-destructive-foreground: var(--color-error-content);
+
+    --color-border: var(--color-base-300);
+    --color-input: var(--color-base-300);
+    --color-ring: var(--color-primary);
+}
+
+/*
+ * React Flow 画布主题适配：颜色一律走 daisyUI 主题变量（跟随 data-theme），
+ * 覆盖 @xyflow/react 自带样式（其默认白底黑字在暗色主题下不可读）。
  */
 .react-flow {
-    background: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background: var(--color-base-100);
+    color: var(--color-base-content);
 }
 
 .react-flow__node {
-    color: hsl(var(--foreground));
+    color: var(--color-base-content);
 }
 
 .react-flow__edge-text {
-    fill: hsl(var(--foreground));
+    fill: var(--color-base-content);
 }
 
 .react-flow__edge-textbg {
-    fill: hsl(var(--card));
+    fill: var(--color-base-100);
 }
 
 .react-flow__controls {
@@ -71,20 +73,20 @@
 }
 
 .react-flow__controls button {
-    background: hsl(var(--card));
-    color: hsl(var(--foreground));
-    border-bottom: 1px solid hsl(var(--border));
-    fill: hsl(var(--foreground));
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    border-bottom: 1px solid var(--color-base-300);
+    fill: var(--color-base-content);
 }
 
 .react-flow__controls button:hover {
-    background: hsl(var(--accent));
+    background: var(--color-base-200);
 }
 
 .react-flow__background {
-    color: hsl(var(--border));
+    color: var(--color-base-300);
 }
 
 .react-flow__minimap {
-    background: hsl(var(--card));
+    background: var(--color-base-100);
 }

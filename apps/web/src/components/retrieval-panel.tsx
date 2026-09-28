@@ -183,7 +183,7 @@ export function RetrievalPanel() {
                     ))}
                     {loading && (
                         <div className="flex justify-start">
-                            <div className="flex max-w-[80%] items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+                            <div className="flex max-w-[80%] items-center gap-2 rounded-lg border border-base-300 bg-card px-3 py-2 text-sm text-muted-foreground">
                                 <Spinner className="h-3.5 w-3.5" />
                                 正在检索…
                             </div>
@@ -306,7 +306,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                     "max-w-[80%] space-y-2 rounded-lg px-3 py-2 text-sm leading-relaxed",
                     isUser
                         ? "bg-primary text-primary-foreground"
-                        : "border bg-card",
+                        : "border border-base-300 bg-card",
                 )}
             >
                 {message.content && (

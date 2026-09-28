@@ -474,7 +474,7 @@ export function WorkflowCanvas({
             {!readOnly && toolbar}
             <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
                 <div
-                    className="h-[520px] rounded-lg border bg-background"
+                    className="h-[520px] rounded-lg border border-base-300 bg-background"
                     style={{ height }}
                 >
                     <ReactFlow<FlowNode, Edge>
@@ -507,7 +507,7 @@ export function WorkflowCanvas({
                     </ReactFlow>
                 </div>
                 {!readOnly && (
-                    <aside className="space-y-4 rounded-lg border p-4 text-sm">
+                    <aside className="space-y-4 rounded-lg border border-base-300 p-4 text-sm">
                         {selectedNode ? (
                             <div className="space-y-2">
                                 <Badge

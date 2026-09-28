@@ -1,55 +1,41 @@
 "use client";
 
 import * as React from "react";
-import {
-    Menu as MTMenu,
-    MenuHandler as MTMenuHandler,
-    MenuList as MTMenuList,
-    MenuItem as MTMenuItem,
-} from "@material-tailwind/react";
 import { cn } from "@/lib/cn";
 
 /**
- * Menu —— MTW Menu/MenuHandler/MenuList/MenuItem 的收拢封装。
- * 注意：MTW MenuHandler 会向子元素注入 ref/onClick（子元素须能承载 props，
- * 通常配 Button 或 button/div 元素），打开方式为点击（MTW 无官方 hover 菜单）。
+ * Menu —— 下拉菜单收拢封装（面板外观/菜单项排版走 daisyUI 的 menu + 语义色 token）。
  *
- * 用法：
+ * 用法与迁移前一致：
  *   <Menu placement="bottom-end">
  *     <MenuHandler><button>触发</button></MenuHandler>
  *     <MenuList className="..."><MenuItem onClick={...}>选项</MenuItem></MenuList>
  *   </Menu>
+ *
+ * 与旧 MTW 实现的差异（对外 API 不变）：
+ *   - MenuHandler 仍向子元素注入 onClick/aria（子元素需能透传 props，通常配 Button 或原生 button）；
+ *   - 展开状态由本组件持有（受控时以 open/handler 为准），点击外部与 Esc 关闭；
+ *   - 面板关闭时直接不渲染。
+ *
+ * 定位用的是普通 Tailwind 绝对定位而非 daisyUI 的 .dropdown：
+ * .dropdown 靠 :focus-within 展开，与「受控 + 点击外部关闭」会互相打架
+ * （点触发器即获得焦点，状态关了样式仍开着），故这里只借 daisyUI 的面板/菜单项视觉。
  */
 
-/** MTW d.ts 的 DOM props 快照差异（见 button.tsx 注释）在收拢边界放宽 */
-type MTMenuLike = React.FC<{
-    placement?: string;
-    open?: boolean;
-    handler?: (v: boolean) => void;
-    offset?: number | Record<string, number>;
-    children?: React.ReactNode;
-}>;
-const MtMenu = MTMenu as unknown as MTMenuLike;
+interface MenuCtxValue {
+    open: boolean;
+    panelClass: string;
+    toggle: () => void;
+    close: () => void;
+}
 
-type MTMenuHandlerLike = React.FC<{
-    children: React.ReactElement;
-}>;
-const MtMenuHandler = MTMenuHandler as unknown as MTMenuHandlerLike;
+const MenuCtx = React.createContext<MenuCtxValue | null>(null);
 
-type MTMenuListLike = React.FC<{
-    className?: string;
-    dismissible?: boolean;
-    children?: React.ReactNode;
-}>;
-const MtMenuList = MTMenuList as unknown as MTMenuListLike;
-
-type MTMenuItemLike = React.FC<{
-    className?: string;
-    disabled?: boolean;
-    onClick?: React.MouseEventHandler<HTMLElement>;
-    children?: React.ReactNode;
-}>;
-const MtMenuItem = MTMenuItem as unknown as MTMenuItemLike;
+/** placement（旧 MTW 取值）→ 面板定位类 */
+const PLACEMENT: Record<string, string> = {
+    "bottom-start": "left-0 top-full mt-2",
+    "bottom-end": "right-0 top-full mt-2",
+};
 
 export function Menu({
     placement = "bottom-start",
@@ -62,15 +48,82 @@ export function Menu({
     handler?: (v: boolean) => void;
     children?: React.ReactNode;
 }) {
+    const [uncontrolled, setUncontrolled] = React.useState(false);
+    const rootRef = React.useRef<HTMLDivElement>(null);
+
+    const controlled = open !== undefined;
+    const isOpen = controlled ? !!open : uncontrolled;
+
+    // handler 放 ref：避免调用方每次渲染传新函数导致 setOpen 抖动、effect 反复解绑
+    const handlerRef = React.useRef(handler);
+    handlerRef.current = handler;
+
+    const setOpen = React.useCallback(
+        (next: boolean) => {
+            if (!controlled) setUncontrolled(next);
+            handlerRef.current?.(next);
+        },
+        [controlled],
+    );
+
+    React.useEffect(() => {
+        if (!isOpen) return;
+        function onPointerDown(e: PointerEvent) {
+            if (
+                rootRef.current &&
+                !rootRef.current.contains(e.target as Node)
+            ) {
+                setOpen(false);
+            }
+        }
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === "Escape") setOpen(false);
+        }
+        document.addEventListener("pointerdown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [isOpen, setOpen]);
+
+    const ctx = React.useMemo<MenuCtxValue>(
+        () => ({
+            open: isOpen,
+            panelClass: PLACEMENT[placement] ?? PLACEMENT["bottom-start"],
+            toggle: () => setOpen(!isOpen),
+            close: () => setOpen(false),
+        }),
+        [isOpen, placement, setOpen],
+    );
+
     return (
-        <MtMenu placement={placement} open={open} handler={handler}>
-            {children}
-        </MtMenu>
+        <MenuCtx.Provider value={ctx}>
+            <div ref={rootRef} className="relative inline-block">
+                {children}
+            </div>
+        </MenuCtx.Provider>
     );
 }
 
 export function MenuHandler({ children }: { children: React.ReactElement }) {
-    return <MtMenuHandler>{children}</MtMenuHandler>;
+    const ctx = React.useContext(MenuCtx);
+    const child = children as React.ReactElement<{
+        onClick?: React.MouseEventHandler<HTMLElement>;
+        "aria-haspopup"?: string;
+        "aria-expanded"?: boolean;
+    }>;
+
+    if (!ctx) return child;
+
+    return React.cloneElement(child, {
+        onClick: (e: React.MouseEvent<HTMLElement>) => {
+            child.props.onClick?.(e);
+            ctx.toggle();
+        },
+        "aria-haspopup": "menu",
+        "aria-expanded": ctx.open,
+    });
 }
 
 export function MenuList({
@@ -80,21 +133,27 @@ export function MenuList({
     className?: string;
     children?: React.ReactNode;
 }) {
+    const ctx = React.useContext(MenuCtx);
+    if (!ctx?.open) return null;
+
     return (
-        <MtMenuList
+        <div
+            role="menu"
             className={cn(
-                "border border-border bg-card p-1 text-sm shadow-md",
+                "menu absolute z-50 min-w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg",
+                ctx.panelClass,
                 className,
             )}
         >
             {children}
-        </MtMenuList>
+        </div>
     );
 }
 
-/** MenuItem —— 统一收敛默认字色/底色（MTW 默认 text 为 blue-gray-900） */
+/** MenuItem —— 菜单项（daisyUI menu 的项排版 + 语义色悬浮态） */
 export function MenuItem({
     className,
+    disabled,
     onClick,
     children,
 }: {
@@ -103,15 +162,23 @@ export function MenuItem({
     onClick?: React.MouseEventHandler<HTMLElement>;
     children?: React.ReactNode;
 }) {
+    const ctx = React.useContext(MenuCtx);
+
     return (
-        <MtMenuItem
-            onClick={onClick}
+        <button
+            type="button"
+            role="menuitem"
+            disabled={disabled}
+            onClick={(e) => {
+                onClick?.(e);
+                ctx?.close();
+            }}
             className={cn(
-                "px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-foreground focus:bg-accent",
+                "flex w-full items-center gap-2 rounded-field px-3 py-2 text-left text-sm text-base-content hover:bg-base-200 disabled:pointer-events-none disabled:opacity-50",
                 className,
             )}
         >
             {children}
-        </MtMenuItem>
+        </button>
     );
 }

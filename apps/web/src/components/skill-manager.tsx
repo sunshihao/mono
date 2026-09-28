@@ -96,7 +96,7 @@ export function SkillManager() {
                 </Badge>
             </div>
 
-            <div className="rounded-md border p-3">
+            <div className="rounded-md border border-base-300 p-3">
                 <p className="mb-2 text-sm font-medium">添加技能</p>
                 <div className="space-y-2">
                     <Input
@@ -131,12 +131,15 @@ export function SkillManager() {
 
             <ul className="space-y-2">
                 {items.length === 0 && (
-                    <li className="rounded-md border p-3 text-xs text-muted-foreground">
+                    <li className="rounded-md border border-base-300 p-3 text-xs text-muted-foreground">
                         还没有技能。添加后即可在工作流画布中用「技能」节点引用。
                     </li>
                 )}
                 {items.map((s) => (
-                    <li key={s.id} className="space-y-1 rounded-md border p-3">
+                    <li
+                        key={s.id}
+                        className="space-y-1 rounded-md border border-base-300 p-3"
+                    >
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">
                                 {s.name}

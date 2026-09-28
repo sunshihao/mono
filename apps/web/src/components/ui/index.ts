@@ -1,7 +1,7 @@
 /**
  * UI 收拢层统一出口 —— apps/web 所有页面/组件一律从这里 import 组件，
- * 禁止直接 import @material-tailwind/react（内部实现全在其下的包装文件里）。
- * 以后全局换肤/换色/换库只改本目录。
+ * 不直接拼 daisyUI 的组件类名（内部实现全在其下的包装文件里）。
+ * 以后全局换肤/换色/换主题只改本目录 + globals.css 的 @plugin "daisyui"。
  */
 export { Button } from "./button";
 export type { ButtonProps } from "./button";

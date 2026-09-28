@@ -1,49 +1,37 @@
 "use client";
 
 import * as React from "react";
-import { Input as MTInput } from "@material-tailwind/react";
 import { cn } from "@/lib/cn";
 
 /**
- * Input —— @material-tailwind/react outlined Input 的收拢封装。
+ * Input —— daisyUI `input` 的收拢封装。
  *
- * 边框常态/placeholder-shown/focus 三态均收敛回 CSS 变量 token
- * （--input/--ring，随 .dark 明暗主题），placeholder 常态可见
- * （MTW outlined 默认仅聚焦时显示占位符）。
+ * daisyUI v5 的 `input` 自带描边与聚焦态，颜色随主题（data-theme）；
+ * 默认 w-full 占满容器（旧 MTW 封装同为整宽，调用方按此布局）。
  *
- * 注意：MTW Input 内部总会渲染一个 floating label 骨架（label 为空串时不可见，
- * 聚焦/输入时顶部边框会有极小的 label 缺口段）——现有页面表单都是外部 label，
- * 不传 label 走空 label 分支即可。
+ * label 渲染为字段上方的可见标签；不传 label 时只输出裸 <input>
+ * （login-form 等用外部 <label htmlFor> 的场景照旧）。
  */
+export interface InputProps extends Omit<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    "size"
+> {
+    label?: string;
+}
 
-/** MTW d.ts 的 DOM props 快照差异（见 button.tsx 注释）在收拢边界放宽 */
-type MTInputLike = React.FC<
-    Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> & {
-        variant?: string;
-        size?: "md" | "lg";
-        color?: string;
-        label?: string;
-        error?: boolean;
-        success?: boolean;
-        icon?: React.ReactNode;
-        labelProps?: Record<string, unknown>;
-        containerProps?: Record<string, unknown>;
-        shrink?: boolean;
-        inputRef?: React.Ref<HTMLInputElement>;
-    }
->;
-const MtInput = MTInput as unknown as MTInputLike;
+export function Input({ className, label, id, ...props }: InputProps) {
+    const field = (
+        <input id={id} className={cn("input w-full", className)} {...props} />
+    );
 
-export function Input({
-    className,
-    ...props
-}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">) {
+    if (!label) return field;
+
     return (
-        <MtInput
-            variant="outlined"
-            size="md"
-            className={cn(className)}
-            {...props}
-        />
+        <label className="block w-full">
+            <span className="label w-full justify-start px-0 pb-1 text-xs text-muted-foreground">
+                {label}
+            </span>
+            {field}
+        </label>
     );
 }

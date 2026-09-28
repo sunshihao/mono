@@ -1,46 +1,24 @@
 "use client";
 
 import * as React from "react";
-import {
-    Select as MTSelect,
-    Option as MTOption,
-} from "@material-tailwind/react";
 import { cn } from "@/lib/cn";
 
 /**
- * Select —— @material-tailwind/react Select（受控 value/onChange）+ Option 的收拢封装。
- * 用法：
+ * Select —— daisyUI `select` 的收拢封装（原生 <select>）。
+ *
+ * 用法（与迁移前一致）：
  *   <Select label="技能" value={v} onChange={setV}>
  *     <Option value="">不使用</Option>
  *     <Option value={o.id}>{o.name}</Option>
  *   </Select>
- * className 落在触发区域（label/字段）上；外层容器宽度默认 w-full（配 containerClassName
- * "w-auto min-w-0" 等收敛为内容宽度，便于放进工具行）。
+ *
+ * onChange 回调签名保持 (value?: string) => void —— 内部包一层从事件里取值，
+ * 调用方无需感知原生事件（既有调用点全部按此签名书写）。
+ *
+ * label 现在渲染为字段上方的可见标签（daisyUI 的 label 排版）；
+ * 旧 MTW 实现是字段内浮动标签，改为上方后与同排的 Input 高度一致，
+ * mcp-tool-manager 里「Select + Input 并排」的布局不受影响。
  */
-
-/** MTW d.ts 的 DOM props 快照差异（见 button.tsx 注释）在收拢边界放宽 */
-type MTSelectLike = React.FC<{
-    label?: string;
-    value?: string;
-    onChange?: (value?: string) => void;
-    disabled?: boolean;
-    error?: boolean;
-    variant?: string;
-    size?: "md" | "lg";
-    color?: string;
-    className?: string;
-    containerProps?: { className?: string };
-    children?: React.ReactNode;
-}>;
-const MtSelect = MTSelect as unknown as MTSelectLike;
-
-type MTOptionLike = React.FC<{
-    value?: string;
-    className?: string;
-    children?: React.ReactNode;
-}>;
-const MtOption = MTOption as unknown as MTOptionLike;
-
 export interface SelectProps {
     label?: string;
     value?: string;
@@ -48,7 +26,7 @@ export interface SelectProps {
     disabled?: boolean;
     error?: boolean;
     className?: string;
-    /** 传给外层容器 div（默认 w-full，传 "w-auto max-w-44" 等收敛为内容宽度） */
+    /** 外层容器宽度控制（默认 w-full；传 "w-auto min-w-0" 收敛为内容宽度） */
     containerClassName?: string;
     children?: React.ReactNode;
 }
@@ -63,28 +41,32 @@ export function Select({
     containerClassName,
     children,
 }: SelectProps) {
-    return (
-        <MtSelect
-            label={label}
+    const field = (
+        <select
             value={value}
-            onChange={onChange}
+            onChange={(e) => onChange?.(e.target.value)}
             disabled={disabled}
-            error={error}
-            variant="outlined"
-            size="md"
-            containerProps={
-                containerClassName
-                    ? { className: containerClassName }
-                    : undefined
-            }
-            className={cn("h-9 text-sm text-foreground", className)}
+            className={cn("select w-full", error && "select-error", className)}
         >
             {children}
-        </MtSelect>
+        </select>
+    );
+
+    if (!label) {
+        return <div className={cn("w-full", containerClassName)}>{field}</div>;
+    }
+
+    return (
+        <div className={cn("w-full", containerClassName)}>
+            <span className="label w-full justify-start px-0 pb-1 text-xs text-muted-foreground">
+                {label}
+            </span>
+            {field}
+        </div>
     );
 }
 
-/** Option —— MTW SelectOption 的收拢别名 */
+/** Option —— 原生 <option>（保持既有 <Option value=...>子节点</Option> 写法） */
 export function Option({
     value,
     className,
@@ -95,8 +77,8 @@ export function Option({
     children?: React.ReactNode;
 }) {
     return (
-        <MtOption value={value} className={className}>
+        <option value={value} className={className}>
             {children}
-        </MtOption>
+        </option>
     );
 }

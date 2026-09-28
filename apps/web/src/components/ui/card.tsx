@@ -1,35 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Card as MTCard } from "@material-tailwind/react";
 import { cn } from "@/lib/cn";
 
 /**
- * Card —— @material-tailwind/react Card 的收拢封装（表面/边框/阴影由 MTW 提供，
- * 颜色收敛回 CSS 变量 token 随明暗主题）。其余分区组件为纯内容容器/排版
- * （与页面标题/正文同类例外），保持原生元素、不引 MTW。
+ * Card —— daisyUI `card` 的收拢封装（圆角/表面色走 daisyUI 主题变量）。
+ *
+ * 分区组件（Header/Content/Title/Description）保持原生容器与既有内边距：
+ * 调用方是按「p-6 上下分区」的旧 shadcn 布局写的，换成 card-body 会改变各页留白，
+ * 故这里只把表面/描边/圆角切到 daisyUI token，布局语义不动。
  */
-
-/** MTW d.ts 的 DOM props 快照差异（见 button.tsx 注释）在收拢边界放宽 */
-type MTCardLike = React.FC<
-    React.HTMLAttributes<HTMLDivElement> & {
-        variant?: string;
-        color?: string;
-        shadow?: boolean;
-    }
->;
-const MtCard = MTCard as unknown as MTCardLike;
-
 export function Card({
     className,
     ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
     return (
-        <MtCard
-            variant="filled"
-            shadow={false}
+        <div
             className={cn(
-                "rounded-lg border border-border bg-card text-card-foreground shadow-sm",
+                "card border border-base-300 bg-base-100 text-base-content",
                 className,
             )}
             {...props}
@@ -37,7 +25,6 @@ export function Card({
     );
 }
 
-/** 内容分区（原生容器）：header/content/title/desc 为排版与布局，不走 MTW */
 export function CardHeader({
     className,
     ...props
