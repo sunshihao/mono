@@ -7,6 +7,7 @@ import { sampleWorkflows } from "@/lib/fixtures";
 import { Badge, Button } from "@/components/ui";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { WorkflowEditor } from "@/components/workflow-editor";
+import { DeleteWorkflowButton } from "@/components/delete-workflow-button";
 
 interface Loaded {
     kind: "db";
@@ -83,6 +84,16 @@ export default async function WorkflowPage({
                     )}
                     {loaded.kind === "db" && (
                         <Badge>v{loaded.workflow.version}</Badge>
+                    )}
+                    {/* 仅 db 工作流可删：示例的 id 不是 uuid，DELETE 会被 param 校验挡下（400） */}
+                    {loaded.kind === "db" && (
+                        <div className="ml-auto">
+                            <DeleteWorkflowButton
+                                id={loaded.workflow.id}
+                                name={loaded.workflow.name}
+                                redirectTo="/"
+                            />
+                        </div>
                     )}
                 </div>
                 {loaded.kind === "sample" && (

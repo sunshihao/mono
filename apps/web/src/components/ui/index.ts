@@ -21,3 +21,5 @@ export { TabBar } from "./tabs-bar";
 export type { TabItem, TabBarProps } from "./tabs-bar";
 export { Menu, MenuHandler, MenuList, MenuItem } from "./menu";
 export { Spinner } from "./spinner";
+export { Dialog, DialogTitle, DialogActions } from "./dialog";
+export type { DialogProps } from "./dialog";

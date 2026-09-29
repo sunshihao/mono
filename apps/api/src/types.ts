@@ -7,9 +7,9 @@ import type { QdrantClient } from "@qdrant/js-client-rest";
 import type { Tracer } from "@opentelemetry/api";
 import type {
     AgentMessage,
-    AgentState,
     QueryRequest,
     QueryResponse,
+    RunResponse,
     SearchResponse,
     WorkflowGraph,
 } from "@repo/types";
@@ -55,12 +55,12 @@ export interface ObservabilityService {
 export interface LangGraphService {
     /** 把可序列化的 WorkflowGraph 编译为可执行图（校验失败抛 ConfigError；内置 MemorySaver checkpointer） */
     compile(graph: WorkflowGraph): unknown;
-    /** 编译并以用户问题（+ 可选历史消息）初始化 AgentState 执行，返回最终 state */
+    /** 编译并以用户问题（+ 可选历史消息）初始化 AgentState 执行，返回最终 state 与逐节点执行轨迹 */
     run(
         graph: WorkflowGraph,
         query: string,
         history?: AgentMessage[],
-    ): Promise<AgentState>;
+    ): Promise<RunResponse>;
 }
 
 export interface LlamaIndexService {

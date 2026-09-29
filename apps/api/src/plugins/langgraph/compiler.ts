@@ -5,7 +5,12 @@ import {
     type BaseCheckpointSaver,
 } from "@langchain/langgraph";
 import { trace } from "@opentelemetry/api";
-import type { AgentMessage, WorkflowGraph, WorkflowNode } from "@repo/types";
+import {
+    RetrieveNodeConfigSchema,
+    type AgentMessage,
+    type WorkflowGraph,
+    type WorkflowNode,
+} from "@repo/types";
 import { ConfigError } from "../../lib/errors.js";
 import type { LlamaIndexService } from "../../types.js";
 import { StateAnnotation } from "./state.js";
@@ -196,9 +201,20 @@ async function executeNode(
                     ],
                 };
             }
+            // 节点 config 决定检索参数（画布可编辑）：topK + 附加技能/工具。
+            // 非法配置整体退回默认值而非抛错 —— 与 skill/mcp 节点的软失败约定一致，
+            // 一个写错的 config 不该让整次运行 500。
+            const parsed = RetrieveNodeConfigSchema.safeParse(
+                node.config ?? {},
+            );
+            const { topK, skillId, mcpToolId } = parsed.success
+                ? parsed.data
+                : { topK: 5, skillId: undefined, mcpToolId: undefined };
             const result = await llm.query({
                 query: lastUser.content,
-                topK: 5,
+                topK,
+                skillId,
+                mcpToolId,
             });
             const answer = result.answer ?? "未找到相关资料。";
             const sources = result.sources

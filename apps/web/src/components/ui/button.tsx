@@ -9,8 +9,10 @@ import { cn } from "@/lib/cn";
  * 约定：components/ui 是 apps/web 的 UI 收拢层，页面/feature 组件一律经此出口取组件，
  * 不直接拼 daisyUI 的组件类名（后续全局换肤/换色只改本目录）。
  *
- * 语义 API 沿用旧 shadcn 风格：variant default|outline|ghost、size default|sm|lg，
- * 映射到 daisyUI 的 btn-primary / btn-outline / btn-ghost 与 btn-md / btn-sm / btn-lg。
+ * 语义 API 沿用旧 shadcn 风格：variant default|outline|ghost|destructive、size default|sm|lg，
+ * 映射到 daisyUI 的 btn-primary / btn-outline / btn-ghost / btn-error 与 btn-md / btn-sm / btn-lg。
+ * destructive 对齐 globals.css 里 --color-destructive → --color-error 的语义别名，
+ * 供不可逆操作（如删除确认）使用。
  *
  * forwardRef：daisyUI 的 dropdown 等组合场景需要 ref 落到实际 button 上，
  * 故本包装继续转发 ref（对外签名与迁移前一致，调用方无需改动）。
@@ -20,6 +22,7 @@ const VARIANT = {
     default: "btn-primary",
     outline: "btn-outline",
     ghost: "btn-ghost",
+    destructive: "btn-error",
 } as const;
 
 const SIZE = {

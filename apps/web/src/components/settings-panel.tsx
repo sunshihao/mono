@@ -1,3 +1,4 @@
+import type { WorkflowNodeType } from "@repo/types";
 import {
     Badge,
     Card,
@@ -6,6 +7,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui";
+import { NODE_TYPES, TYPE_META } from "@/lib/node-meta";
 import { SettingsNav } from "@/components/settings-nav";
 import { SkillManager } from "@/components/skill-manager";
 import { McpToolManager } from "@/components/mcp-tool-manager";
@@ -131,44 +133,29 @@ claude mcp add rag-workbench -- node <mono路径>/apps/mcp/dist/index.js`}</code
     );
 }
 
-/** 画布节点元素说明（与 workflow-canvas TYPE_META 语义一致） */
-const NODE_ELEMENTS = [
-    {
-        type: "start",
-        name: "开始",
-        desc: "工作流入口。一条工作流必须有且只有一个开始节点，流程从它启动。",
-    },
-    {
-        type: "llm",
-        name: "LLM",
-        desc: "对话节点。把当前上下文交给大模型（qwen-plus）生成回复。",
-    },
-    {
-        type: "retrieve",
-        name: "检索",
-        desc: "知识库检索节点。对最新用户问题执行 RAG（向量检索 + 合成答案），回答附带来源。",
-    },
-    {
-        type: "skill",
-        name: "技能",
-        desc: "引用设置页配置的提示词型技能（config.refId），执行时作为 system 指令注入 LLM。",
-    },
-    {
-        type: "mcp",
-        name: "MCP",
-        desc: "引用设置页注册的外部工具端点（config.refId），执行时调用 HTTP 端点（{query} 替换为问题）。",
-    },
-    {
-        type: "router",
-        name: "路由",
-        desc: "条件分发。按出边 condition 选择去向——condition 即路由键（运行时取 state.route 或 currentChannel），无匹配时走默认出边。",
-    },
-    {
-        type: "end",
-        name: "结束",
-        desc: "终点。执行到此结束，返回当前累积的对话状态。",
-    },
-];
+/**
+ * 各节点类型的说明文案（只维护这里独有的描述；名称与顺序取自 @/lib/node-meta）。
+ *
+ * 用 Record<WorkflowNodeType, string> 而非手工数组：枚举新增节点类型时这里漏项会**编译报错**
+ * （原先的手工数组漏项只会静默少一行）。
+ */
+const NODE_DESCRIPTIONS: Record<WorkflowNodeType, string> = {
+    start: "工作流入口。一条工作流必须有且只有一个开始节点，流程从它启动。",
+    llm: "对话节点。把当前上下文交给大模型（qwen-plus）生成回复。",
+    retrieve:
+        "知识库检索节点。对最新用户问题执行 RAG（向量检索 + 合成答案），回答附带来源；检索参数（topK / 附加技能 / 附加工具）在画布右侧属性面板配置。",
+    skill: "引用设置页配置的提示词型技能（config.refId），执行时作为 system 指令注入 LLM。",
+    mcp: "引用设置页注册的外部工具端点（config.refId），执行时调用 HTTP 端点（{query} 替换为问题）。",
+    router: "条件分发。按出边 condition 选择去向——condition 即路由键（运行时取 state.route 或 currentChannel），无匹配时走默认出边。",
+    end: "终点。执行到此结束，返回当前累积的对话状态。",
+};
+
+/** 画布节点元素说明：顺序取 NODE_TYPES，名称取 TYPE_META，描述见上 */
+const NODE_ELEMENTS = NODE_TYPES.map((type) => ({
+    type,
+    name: TYPE_META[type].label,
+    desc: NODE_DESCRIPTIONS[type],
+}));
 
 /** 工作流元素库：可编排节点与连线约定参考 */
 function ElementsCard() {

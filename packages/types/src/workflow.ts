@@ -22,6 +22,23 @@ export const WorkflowNodeSchema = z.object({
 });
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>;
 
+/**
+ * retrieve 节点的 config（画布写入、langgraph 编译器读取）。
+ *
+ * config 本身仍是开放的 record（见上），这是给编译器用的类型化解析入口：
+ * 用 safeParse 拿默认值，非法就整体退回默认而非抛错（与编译器"软失败"约定一致）。
+ *
+ * topK 用 coerce：config 的值来自 z.unknown()，手改过的图可能存成字符串。
+ */
+export const RetrieveNodeConfigSchema = z.object({
+    topK: z.coerce.number().int().min(1).max(50).default(5),
+    /** 附加技能：合成时以 system 指令注入（对齐知识库 tab 的同名能力） */
+    skillId: z.string().uuid().optional(),
+    /** 附加工具：其返回并入合成上下文 */
+    mcpToolId: z.string().uuid().optional(),
+});
+export type RetrieveNodeConfig = z.infer<typeof RetrieveNodeConfigSchema>;
+
 export const WorkflowEdgeSchema = z.object({
     id: z.string().min(1),
     source: z.string().min(1),

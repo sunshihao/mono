@@ -124,11 +124,7 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDto }) {
 
             <WorkflowCanvas graph={draft} onChange={setDraft} height={420} />
 
-            <WorkflowRunPanel
-                workflowId={workflow.id}
-                graph={saved}
-                dirty={dirty}
-            />
+            <WorkflowRunPanel workflowId={workflow.id} dirty={dirty} />
         </div>
     );
 }

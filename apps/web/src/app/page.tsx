@@ -16,6 +16,8 @@ import { HomeTabs } from "@/components/home-tabs";
 import { RetrievalPanel } from "@/components/retrieval-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { NewWorkflowButton } from "@/components/new-workflow-button";
+import { DeleteWorkflowButton } from "@/components/delete-workflow-button";
+import { cn } from "@/lib/cn";
 
 interface WorkflowList {
     workflows: WorkflowDto[];
@@ -118,23 +120,43 @@ function WorkflowCard({
     sample?: boolean;
 }) {
     return (
-        <Link href={`/workflows/${id}`}>
-            <Card className="h-full transition-colors hover:bg-base-200/50">
-                <CardHeader>
-                    <CardTitle className="flex items-center justify-between text-base">
-                        {name}
-                        {sample && (
-                            <Badge className="border-muted text-muted-foreground">
-                                示例
-                            </Badge>
-                        )}
-                    </CardTitle>
-                    <CardDescription>{description}</CardDescription>
-                </CardHeader>
-                <CardContent className="text-xs text-muted-foreground">
-                    打开画布 →
-                </CardContent>
-            </Card>
-        </Link>
+        // 删除钮放在 <Link> 之外作兄弟节点：<button> 嵌 <a> 是非法 HTML（React 会告警），
+        // 且点击会冒泡触发跳转。独立绝对定位层既不需要 preventDefault 也不需要
+        // stopPropagation，也躲开了 Cmd/中键点击绕过 onClick 的竞态。
+        <div className="relative">
+            <Link href={`/workflows/${id}`} className="block h-full">
+                <Card className="h-full transition-colors hover:bg-base-200/50">
+                    <CardHeader>
+                        <CardTitle
+                            className={cn(
+                                "flex items-center justify-between text-base",
+                                // 给右上角删除钮留位，避免长名称压到按钮下
+                                !sample && "pr-6",
+                            )}
+                        >
+                            <span className="truncate">{name}</span>
+                            {sample && (
+                                <Badge className="border-muted text-muted-foreground">
+                                    示例
+                                </Badge>
+                            )}
+                        </CardTitle>
+                        <CardDescription>{description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground">
+                        打开画布 →
+                    </CardContent>
+                </Card>
+            </Link>
+            {/* 示例不在库中（id 非 uuid），删除会被 param 校验挡下，故不渲染入口 */}
+            {!sample && (
+                <DeleteWorkflowButton
+                    id={id}
+                    name={name}
+                    variant="icon"
+                    className="absolute right-2 top-2 z-10"
+                />
+            )}
+        </div>
     );
 }

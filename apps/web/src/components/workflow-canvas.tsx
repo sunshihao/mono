@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css";
 import type { WorkflowGraph, WorkflowNodeType } from "@repo/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { NODE_TYPES, TYPE_META } from "@/lib/node-meta";
 import { Badge, Button, Input, Option, Select } from "@/components/ui";
 
 /**
@@ -26,49 +27,9 @@ import { Badge, Button, Input, Option, Select } from "@/components/ui";
  * 周围工具区（toolbar/属性面板/引用下拉）走 @/components/ui 收拢层（内部 MTW）。
  */
 
-export const NODE_TYPES: WorkflowNodeType[] = [
-    "start",
-    "llm",
-    "retrieve",
-    "router",
-    "skill",
-    "mcp",
-    "end",
-];
-
-const TYPE_META: Record<
-    WorkflowNodeType,
-    { label: string; className: string }
-> = {
-    start: {
-        label: "开始",
-        className: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950",
-    },
-    llm: {
-        label: "LLM",
-        className: "border-violet-500 bg-violet-50 dark:bg-violet-950",
-    },
-    retrieve: {
-        label: "检索",
-        className: "border-sky-500 bg-sky-50 dark:bg-sky-950",
-    },
-    router: {
-        label: "路由",
-        className: "border-amber-500 bg-amber-50 dark:bg-amber-950",
-    },
-    skill: {
-        label: "技能",
-        className: "border-teal-500 bg-teal-50 dark:bg-teal-950",
-    },
-    mcp: {
-        label: "MCP",
-        className: "border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-950",
-    },
-    end: {
-        label: "结束",
-        className: "border-rose-500 bg-rose-50 dark:bg-rose-950",
-    },
-};
+// 节点类型元数据见 @/lib/node-meta（画布/设置页图例/执行轨迹共用一份）。
+// 这里 re-export 仅为保持既有 import 路径可用。
+export { NODE_TYPES, TYPE_META } from "@/lib/node-meta";
 
 interface FlowNodeData extends Record<string, unknown> {
     label: string;
@@ -167,7 +128,8 @@ export interface WorkflowCanvasProps {
 /**
  * React Flow 画布：
  *  - 只读（无 onChange）：渲染展示
- *  - 编辑：添加 5 类节点、拖拽、连线（router 出边可设 condition）、删除、重命名
+ *  - 编辑：添加 7 类节点（start/llm/retrieve/router/skill/mcp/end）、拖拽、
+ *    连线（router 出边可设 condition）、删除、重命名
  */
 export function WorkflowCanvas({
     graph,
@@ -286,11 +248,14 @@ export function WorkflowCanvas({
             data: {
                 label: meta.label,
                 nodeType: type,
-                // 引用型节点：待属性面板选择配置项
+                // 各类节点的默认配置：
+                // 引用型（skill/mcp）待属性面板选 refId；retrieve 预置默认 topK（编译器读它）
                 config:
                     type === "skill" || type === "mcp"
                         ? { refId: "" }
-                        : undefined,
+                        : type === "retrieve"
+                          ? { topK: 5 }
+                          : undefined,
             },
             className: cn(
                 "rounded-md border-2 px-3 py-2 text-sm font-medium shadow-sm",
@@ -434,6 +399,26 @@ export function WorkflowCanvas({
         });
     };
 
+    /**
+     * 写选中节点的单个 config 字段（retrieve 的 topK/skillId/mcpToolId 等）。
+     * 展开既有 config：`_pos`（拖拽坐标）与其余键必须原样保留。
+     * 值为 undefined 时删除该键（下拉清空 → 不能留 ""，uuid 校验会挡下）。
+     */
+    const setNodeConfigField = (key: string, value: unknown) => {
+        if (!selectedNodeId) return;
+        setNodes((prev) => {
+            const next = prev.map((n) => {
+                if (n.id !== selectedNodeId) return n;
+                const config = { ...(n.data.config ?? {}) };
+                if (value === undefined) delete config[key];
+                else config[key] = value;
+                return { ...n, data: { ...n.data, config } };
+            });
+            emit(next, edges);
+            return next;
+        });
+    };
+
     const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
     const selectedNode = nodes.find((n) => n.id === selectedNodeId);
     const selectedEdgeSourceType = selectedEdge
@@ -546,6 +531,16 @@ export function WorkflowCanvas({
                                         onChange={setNodeRef}
                                     />
                                 )}
+                                {selectedNode.data.nodeType === "retrieve" && (
+                                    <RetrieveConfig
+                                        // key：换节点时重挂载，丢掉残留的输入框草稿
+                                        key={selectedNode.id}
+                                        config={selectedNode.data.config ?? {}}
+                                        options={refOptions}
+                                        error={refError}
+                                        onChange={setNodeConfigField}
+                                    />
+                                )}
                             </div>
                         ) : selectedEdge ? (
                             <div className="space-y-2">
@@ -584,6 +579,99 @@ export function WorkflowCanvas({
                     </aside>
                 )}
             </div>
+        </div>
+    );
+}
+
+/**
+ * retrieve 节点属性面板：检索参数（config.topK/skillId/mcpToolId）。
+ *
+ * 三个字段即知识库 tab 问答面板可调的那几项，编译器在 executeNode 的 retrieve 分支读取。
+ * 附加技能/工具是可选的，故清空要写回 undefined 而不是 ""（uuid 校验会挡下空串）。
+ */
+function RetrieveConfig({
+    config,
+    options,
+    error,
+    onChange,
+}: {
+    config: Record<string, unknown>;
+    options: RefOption[];
+    error: string | null;
+    onChange: (key: string, value: unknown) => void;
+}) {
+    // 输入框保留原始文本（允许中途清空/键入），只在解析出合法整数时写回 config；
+    // 失焦时清掉草稿，非法输入便视觉回退到已提交值。父级以 node id 作 key，换节点即重置。
+    const [draft, setDraft] = useState<string | null>(null);
+    const committed = typeof config.topK === "number" ? config.topK : 5;
+    const skillId = typeof config.skillId === "string" ? config.skillId : "";
+    const mcpToolId =
+        typeof config.mcpToolId === "string" ? config.mcpToolId : "";
+
+    return (
+        <div className="space-y-2">
+            <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">
+                    topK（召回条数，1–50）
+                </span>
+                <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={draft ?? String(committed)}
+                    onChange={(e) => {
+                        const raw = e.target.value;
+                        setDraft(raw);
+                        const n = Number(raw);
+                        if (
+                            raw !== "" &&
+                            Number.isInteger(n) &&
+                            n >= 1 &&
+                            n <= 50
+                        ) {
+                            onChange("topK", n);
+                        }
+                    }}
+                    onBlur={() => setDraft(null)}
+                />
+            </label>
+            <Select
+                label="附加技能（可选）"
+                value={skillId}
+                onChange={(v) => onChange("skillId", v || undefined)}
+                containerClassName="w-full"
+                className="w-full text-sm"
+            >
+                <Option value="">不附加</Option>
+                {options
+                    .filter((o) => o.kind === "skill")
+                    .map((o) => (
+                        <Option key={o.id} value={o.id}>
+                            {o.name}
+                        </Option>
+                    ))}
+            </Select>
+            <Select
+                label="附加工具（可选）"
+                value={mcpToolId}
+                onChange={(v) => onChange("mcpToolId", v || undefined)}
+                containerClassName="w-full"
+                className="w-full text-sm"
+            >
+                <Option value="">不附加</Option>
+                {options
+                    .filter((o) => o.kind === "mcp")
+                    .map((o) => (
+                        <Option key={o.id} value={o.id}>
+                            {o.name}
+                        </Option>
+                    ))}
+            </Select>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <p className="text-xs text-muted-foreground">
+                走知识库检索管线：附加技能以 system
+                指令并入合成，附加工具返回并入上下文。
+            </p>
         </div>
     );
 }

@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { AgentMessageSchema } from "./agent.js";
+import { AgentMessageSchema, AgentStateSchema } from "./agent.js";
 import {
     WorkflowDefinitionSchema,
     WorkflowGraphSchema,
+    WorkflowNodeTypeSchema,
     type WorkflowDefinition,
 } from "./workflow.js";
 
@@ -90,6 +91,26 @@ export const RunRequestSchema = z.object({
     messages: z.array(AgentMessageSchema).max(50).optional(),
 });
 export type RunRequest = z.infer<typeof RunRequestSchema>;
+
+/** 执行轨迹的一步（一个节点在本轮的实际执行） */
+export const RunStepSchema = z.object({
+    nodeId: z.string(),
+    type: WorkflowNodeTypeSchema,
+    label: z.string().optional(),
+    /** 该节点本轮产出的消息（start/router/end 等直通节点为空） */
+    messages: z.array(AgentMessageSchema).default([]),
+});
+export type RunStep = z.infer<typeof RunStepSchema>;
+
+/**
+ * POST /v1/workflows/:id/run 的响应 = 最终 AgentState + 逐节点执行轨迹。
+ * trace 是在 AgentState 之上**追加**的字段（additive），故既有只读 state.messages 的调用方不受影响。
+ * 轨迹顺序即实际执行顺序，可据此看出 router 走了哪个分支。
+ */
+export const RunResponseSchema = AgentStateSchema.extend({
+    trace: z.array(RunStepSchema).default([]),
+});
+export type RunResponse = z.infer<typeof RunResponseSchema>;
 
 export const QueryResponseSchema = z.object({
     query: z.string(),

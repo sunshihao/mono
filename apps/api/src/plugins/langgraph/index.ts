@@ -1,7 +1,7 @@
 import { MemorySaver } from "@langchain/langgraph";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import type { AgentMessage, AgentState } from "@repo/types";
+import type { AgentMessage, AgentState, RunStep } from "@repo/types";
 import { ConfigError } from "../../lib/errors.js";
 import type { LangGraphService } from "../../types.js";
 import type { Plugin } from "../types.js";
@@ -82,16 +82,60 @@ export const langgraphPlugin: Plugin<LangGraphService> = {
                     ...history,
                     { role: "user", content: query },
                 ];
-                const state = await compiled.invoke(
+                // 用 stream 而非 invoke：invoke 只给终态，看不出逐节点执行顺序、
+                // 也看不出 router 实际走了哪个分支。同时订阅两种模式：
+                //   updates —— 逐步记录执行轨迹（顺序即实际执行顺序）
+                //   values  —— 拿权威终态（不自己按 reducer 重建 state：messages 是
+                //              concat、currentChannel/route 是 last-write-wins，重建易错）
+                const stream = await compiled.stream(
                     { messages },
                     {
                         configurable: {
                             // 每次 run 独立 thread；同一 thread_id 可经 checkpointer 续跑
                             thread_id: crypto.randomUUID(),
                         },
+                        streamMode: ["updates", "values"],
                     },
                 );
-                return state as unknown as AgentState;
+
+                const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+                const trace: RunStep[] = [];
+                let final: AgentState | undefined;
+
+                for await (const chunk of stream) {
+                    // 多模式流的块是 [mode, payload] 元组
+                    const [mode, payload] = chunk as [string, unknown];
+                    if (mode === "updates") {
+                        for (const [nodeId, update] of Object.entries(
+                            (payload ?? {}) as Record<string, unknown>,
+                        )) {
+                            const node = byId.get(nodeId);
+                            // 跳过 __start__/__interrupt__ 等内部键（不在图节点表里）
+                            if (!node) continue;
+                            const produced = (
+                                update as { messages?: unknown } | null
+                            )?.messages;
+                            trace.push({
+                                nodeId,
+                                type: node.type,
+                                ...(node.label ? { label: node.label } : {}),
+                                messages: Array.isArray(produced)
+                                    ? (produced as AgentMessage[])
+                                    : [],
+                            });
+                        }
+                    } else if (mode === "values") {
+                        final = payload as AgentState;
+                    }
+                }
+
+                if (!final) {
+                    // values 模式必然先吐出输入态，走到这里说明流被中断——宁可响亮失败
+                    throw new ConfigError(
+                        "langgraph stream ended without a values chunk",
+                    );
+                }
+                return { ...final, trace };
             },
         };
     },
