@@ -13,3 +13,5 @@ deploy/web.env
 *.log
 .DS_Store
 .next
+# tsc 增量编译缓存（生成物，勿入库）
+*.tsbuildinfo

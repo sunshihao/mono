@@ -10,7 +10,6 @@
         "lint": "next lint"
     },
     "dependencies": {
-        "@repo/api": "workspace:*",
         "@repo/types": "workspace:*",
         "@xyflow/react": "^12.11.3",
         "clsx": "^2.1.1",
@@ -22,6 +21,7 @@
         "tailwind-merge": "^3.6.0"
     },
     "devDependencies": {
+        "@repo/api": "workspace:*",
         "@tailwindcss/postcss": "^4.3.3",
         "@types/node": "^26.2.0",
         "@types/react": "^18.3.12",

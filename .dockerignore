@@ -17,3 +17,6 @@ apps/data/repos/
 apps/data/.sync-state/
 # 部署编排与凭据（凭据经 compose 的 env_file 注入，绝不进镜像）
 deploy/
+
+# tsc 增量缓存（生成物，避免陈旧类型检查状态进构建上下文）
+**/*.tsbuildinfo

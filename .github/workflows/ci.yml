@@ -1,0 +1,68 @@
+name: CI
+
+# 推 main 与所有 PR；同分支的新推送取消旧任务，省额度
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck / test / lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # 版本取自 package.json 的 packageManager 字段（pnpm@10.28.2），无需再写 version
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          # 与镜像里的 node:22-alpine 对齐，避免"CI 绿、镜像里跑不起来"
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm lint
+
+  compose:
+    name: compose 编排校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 校验 deploy 编排文件可解析
+        run: |
+          # data 的 env_file 是 required:true，CI 无凭据文件，用样例占位
+          # （此步只校验语法与插值，不校验凭据值）
+          cp deploy/data.env.example deploy/data.env
+          docker compose --env-file deploy/compose.env config -q
+
+  docker:
+    name: 构建镜像 (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+          - app: web
+            # 构建期参数不能为空（next build 会内联它）
+            build_args: NEXT_PUBLIC_API_URL=https://example.invalid/api
+          - app: ingestion
+          - app: data
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      # 这一关专门拦"依赖在 alpine 里装不上"类问题：
+      # 例 tree-sitter 的 postinstall 要 node-gyp 编译，曾让四个镜像全部构建失败而无人察觉
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}

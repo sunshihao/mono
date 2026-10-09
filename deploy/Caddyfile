@@ -13,6 +13,14 @@
 {$SITE_ADDRESS:localhost} {
 	encode zstd gzip
 
+	# ---- web 自己的 Next route handler，**必须排在 /api/* 之前** ----
+	# 登录/登出是 web 应用内的路由（签发/清除会话 cookie），浏览器以同源相对路径
+	# 请求 /api/auth/login；若被下面的 /api/* 抢走会转给后端 api:3000 变成 404，
+	# 结果就是"登录页永远登不进去"。handle 块按书写顺序匹配、命中即止。
+	handle /api/auth/* {
+		reverse_proxy web:3001
+	}
+
 	# ---- api 网关（浏览器与 web 服务端都经此访问）----
 	handle_path /api/* {
 		reverse_proxy api:3000

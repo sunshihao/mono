@@ -143,7 +143,7 @@ pnpm dev:data                                     # 一体化启动（webhook+wo
 | checkpointer | MemorySaver 进程内存，重启丢状态 | PG checkpointer（drizzle 已就绪） |
 | 画布编辑 | 无撤销/重做、无节点 config 表单；router 条件为字符串约定 | 命令栈、节点属性面板、条件表达式 DSL |
 | 认证/授权 | 骨架未做 | 网关层 auth 中间件（插件机制可挂载） |
-| 编排与部署 | docker compose 一键起已就绪（api/web/ingestion/data + Caddy 反代 + 可选 local-infra）；**无 CI/e2e 测试** | CI 流水线（typecheck/test/镜像构建）+ 集成测试 |
+| 编排与部署 | docker compose 一键起已就绪（api/web/ingestion/data + Caddy 反代 + 可选 local-infra）；CI 已就绪（`.github/workflows/ci.yml`：typecheck/test/lint + compose 校验 + 四镜像构建）；**无 e2e 测试** | e2e 冒烟（起栈后打真实端点） |
 
 ## 部署（Docker）
 
@@ -157,19 +157,38 @@ cp deploy/ingestion.env.example deploy/ingestion.env
 cp deploy/data.env.example      deploy/data.env
 cp deploy/web.env.example       deploy/web.env
 
-docker compose up -d --build                          # 核心四服务（端口默认只绑 127.0.0.1）
-docker compose --profile proxy up -d                  # + Caddy 同源反代（SITE_ADDRESS=<域名>）
-docker compose --profile local-infra up -d            # + 容器版 PG/Redis/Qdrant
+pnpm docker:up                                        # = docker compose --env-file deploy/compose.env up -d --build
+pnpm docker:ps                                        # 四个服务（端口默认只绑 127.0.0.1）
+# 另两个 profile（需手动带 flag，脚本未封装）：
+#   docker compose --env-file deploy/compose.env --profile proxy up -d         # + Caddy 同源反代
+#   docker compose --env-file deploy/compose.env --profile local-infra up -d   # + 容器版 PG/Redis/Qdrant
 ```
 
-- **同源反代（生产推荐）**：`NEXT_PUBLIC_API_URL=https://<域名>/api docker compose up -d --build web` —— Caddy 把 `/api/*` 剥前缀转给 api:3000，api 无需暴露公网（api 业务路由目前无鉴权，见待改进表）。
+> ⚠️ **所有 compose 命令都必须带 `--env-file deploy/compose.env`**（或走 `pnpm docker:*`）。
+> compose 默认读项目根目录的 `.env` 做插值，而本仓根 `.env` 是 JSON 凭据总账，会直接报
+> `unexpected character "{"` 而无法启动。`deploy/compose.env` 只放端口/域名/URL 等公开变量。
+
+- **同源反代（生产推荐）**：在 `deploy/compose.env` 设 `NEXT_PUBLIC_API_URL=https://<域名>/api` 与 `SITE_ADDRESS=<域名>`，再 `pnpm docker:up` + 起 proxy profile —— api 无需暴露公网（api 业务路由目前无鉴权，见待改进表）。
+  Caddy 路由表（`handle` 块按书写顺序匹配，**顺序不能乱**）：
+
+  | 路径 | 去向 | 说明 |
+  |---|---|---|
+  | `/api/auth/*` | **web:3001** | web 自己的 Next route handler（签发/清除会话 cookie）。**必须排在 `/api/*` 之前**——否则被后端抢走后登录页会 404 |
+  | `/api/*` | api:3000（剥前缀） | 浏览器与 web 服务端都经此访问后端 |
+  | `/webhook/github` | data:3003 | GitHub push 入口（HMAC 校验在应用内） |
+  | `/webhooks/*` | ingestion:3002 | 默认注释掉，按需放开 |
+  | 其余 | web:3001 | 前端页面 |
+
+  实测：`/api/healthz` 命中 api、`/login` 命中 web、`/webhook/github` 命中 data、漏写 `/api` 前缀的 `/v1/*` 落到 web 404、`POST /api/auth/login` 命中 web 的 handler。
+- **服务端 API 地址分离（`API_URL_INTERNAL`）**：容器化后 web 的**服务端**（route handler / RSC）不能复用 `NEXT_PUBLIC_API_URL`——直连模式下容器里的 `localhost` 是 web 自己（ECONNREFUSED），同源模式下要绕公网域名回来（hairpin）。故 `apps/web/src/lib/api.ts` 在服务端优先读 `API_URL_INTERNAL`，compose 已固定注入 `http://api:3000`（见该文件注释）。排查"登录永远 503 auth_unavailable"时先看这里。
 - **GitHub webhook 入口**：Caddy 已把 `/webhook/github` 转给 data:3003（每仓库 HMAC secret 校验在应用内）；ingestion 的 `/webhooks/*` 默认不对外，按需在 `deploy/Caddyfile` 放开。
-- **data 前置**：容器内不做 `git clone`（`git.ts` 只对已存在仓库做 fetch/diff）——须先在宿主机 `git submodule add <url> apps/data/repos/<name>`；`repos/` 与 `.sync-state/` 经 bind mount 持久化，镜像已装 `git`/`openssh-client`，并放行 `safe.directory`（bind mount 属主与容器 root 不一致）。
-- **构建期内联**：`NEXT_PUBLIC_API_URL` 改动后必须重建 web 镜像（`--build`），改运行时 env 无效；web 的 CMD 是 `next start`，**不读** `/app/.env`，其变量经 `env_file` 注入。
+- **⚠️ 环境变量填写规则（实测踩过）**：**可选变量必须整行注释掉，不要写成 `KEY=` 留空**。compose 的 `env_file` 会把空值注入成空字符串，对 `z.string().url().optional()` 是「存在但非法」→ **ingestion / data 直接 Exited(1) 崩溃**（api 因插件注册表容错，只降级 disabled）。各 `.env.example` 已按此规则写好注释。
+- **data 前置**：容器内不做 `git clone`（`git.ts` 只对已存在仓库做 fetch/diff）——须先在宿主机 `git clone <url> apps/data/repos/<name>`；`repos/` 与 `.sync-state/` 经 bind mount 持久化，镜像已装 `git`/`openssh-client`，并放行 `safe.directory`（bind mount 属主与容器 root 不一致）。data 的 `env_file` 是唯一 `required: true`（其凭据为设计上的硬需求，缺文件时 compose 直接报错而不是崩溃循环）。
+- **构建期内联**：`NEXT_PUBLIC_API_URL` 改动后必须重建 web 镜像（`--build`），改运行时 env 无效；web 的 CMD 是 `node apps/web/server.js`（`output: "standalone"` 产物），**不读** `/app/.env`，其运行时变量经 `env_file` / `environment` 注入。web 镜像实测 ~300MB 级：靠 standalone 产物 + `@repo/api` 放在 web 的 devDependencies（它只是 type-only 导入；错放 dependencies 会让 `pnpm deploy` 把整棵后端依赖树打进镜像，实测涨到 954MB，见 `apps/web/next.config.mjs` 注释）。
 
 ### 手工单容器
 
-四个服务均可从仓库根独立构建（多阶段：安装 → workspace 构建 → `pnpm deploy` 提取生产产物）：
+四个服务均可从仓库根独立构建（多阶段：安装 → workspace 构建 → 提取生产产物；api/ingestion/data 用 `pnpm deploy --prod`，web 用 Next 的 `output: "standalone"`）：
 
 ```bash
 docker build -f apps/api/Dockerfile       -t repo-api       .

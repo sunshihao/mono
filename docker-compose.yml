@@ -68,6 +68,12 @@ services:
                 # 同源模式（配 --profile proxy）：改成 https://<域名>/api 后重建
                 NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
         restart: unless-stopped
+        # server 侧（route handler / RSC）走 compose 网络直连 api 容器。
+        # 不设这个的话，服务端会去用上面的 NEXT_PUBLIC_API_URL：直连模式下容器里的
+        # localhost 是 web 自己（ECONNREFUSED → 登录永远 503），同源模式下要绕公网
+        # 域名回来（hairpin）。见 apps/web/src/lib/api.ts 注释。
+        environment:
+            API_URL_INTERNAL: http://api:3000
         env_file:
             - path: deploy/web.env
               required: false
@@ -123,9 +129,14 @@ services:
             context: .
             dockerfile: apps/data/Dockerfile
         restart: unless-stopped
+        # 唯一 required:true 的服务：data 的凭据是**设计上的硬需求**
+        # （sync.config.yaml 用 env: 引用 QDRANT_URL/QDRANT_API_KEY/OPENAI_API_KEY，
+        #   缺失即 fail-fast 退出）。实测缺此文件时容器会 Restarting 崩溃循环、
+        #   日志刷栈；改成 required:true 后 compose 直接报「env file not found」。
+        # 其余三个服务保持 required:false：api/ingestion 设计为降级 disabled 仍健康。
         env_file:
             - path: deploy/data.env
-              required: false
+              required: true
         volumes:
             # 子仓库检出（宿主机 git submodule add / clone 后挂进来，容器不负责 clone）
             - ${DATA_REPOS_DIR:-./apps/data/repos}:/app/repos
