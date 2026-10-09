@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1
+# 注：原 `# syntax=docker/dockerfile:1` 已移除——本仓 Dockerfile 未使用任何 BuildKit 专属语法，
+# 而该指令会强制 BuildKit 先从 Docker Hub 拉 frontend 镜像 docker/dockerfile:1（实测该路径在
+# 国内网络/无代理时直接 i/o timeout，构建第一步即失败）。
 
 # 从仓库根构建：docker build -f apps/data/Dockerfile -t repo-data .
 # pnpm deploy 将包与其生产依赖打包成独立目录，免手工挑文件。

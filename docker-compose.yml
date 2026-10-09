@@ -1,15 +1,22 @@
 # mono —— docker compose 服务编排（api / web / ingestion / data）
 #
+# ⚠️ 所有 compose 命令都必须带 `--env-file deploy/compose.env`（或用根 package.json 的
+#     docker:* 脚本）。原因：compose 默认会读项目根目录的 .env 做插值，而本仓根 .env 是
+#     JSON 凭据总账，不是 dotenv 格式，compose 会在解析阶段直接失败：
+#       failed to read ./.env: line 1: unexpected character "{"
+#     --env-file 指定后即不再读根 .env；该文件只放端口/域名/URL 等**公开**插值变量。
+#
 # 用法
 #   1) 写凭据（凭据真源是根 .env 的 JSON 总账，按服务拆分到 deploy/*.env）：
 #        cp deploy/api.env.example       deploy/api.env
 #        cp deploy/ingestion.env.example deploy/ingestion.env
 #        cp deploy/data.env.example      deploy/data.env
 #        cp deploy/web.env.example       deploy/web.env
-#      deploy/*.env 已被 .gitignore 排除，不会入库。
-#   2) 起核心四服务：      docker compose up -d --build
-#   3) 需要同源反代/TLS：  SITE_ADDRESS=rag.example.com docker compose --profile proxy up -d
-#   4) 不用远程基础设施：  docker compose --profile local-infra up -d
+#      这四份已被 .gitignore 排除，不会入库。
+#   2) 起核心四服务：      pnpm docker:up      （= docker compose --env-file deploy/compose.env up -d --build）
+#   3) 需要同源反代/TLS：  在 deploy/compose.env 设 SITE_ADDRESS 与 NEXT_PUBLIC_API_URL 后
+#                          pnpm docker:up 并 docker compose --env-file deploy/compose.env --profile proxy up -d
+#   4) 不用远程基础设施：  docker compose --env-file deploy/compose.env --profile local-infra up -d
 #      （起容器版 PG/Redis/Qdrant；此时各 env 里的主机名要改成 postgres/redis/qdrant）
 #
 # 访问
@@ -22,7 +29,7 @@
 #   * api / ingestion / data 的 CMD 带 --env-file-if-exists=.env，因此「挂载 /app/.env」也能生效；
 #     web 的 CMD 是 next start，**不读** /app/.env，其变量只能经 env_file / environment 注入。
 #
-# 需要 ≥ Compose Spec（env_file 的 required 字段自 docker compose v2.24 起支持）
+# 需要 ≥ Compose Spec（env_file 的 required 字段自 docker compose v2.24 起支持；实测 v5.5.1 可用）
 name: mono
 
 services:
@@ -177,7 +184,11 @@ services:
         volumes:
             - pg-data:/var/lib/postgresql/data
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myappuser} -d ${POSTGRES_DB:-myappdb}"]
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER:-myappuser} -d ${POSTGRES_DB:-myappdb}",
+                ]
             interval: 10s
             timeout: 5s
             retries: 5
@@ -195,7 +206,14 @@ services:
         volumes:
             - redis-data:/data
         healthcheck:
-            test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-myapppass}", "ping"]
+            test:
+                [
+                    "CMD",
+                    "redis-cli",
+                    "-a",
+                    "${REDIS_PASSWORD:-myapppass}",
+                    "ping",
+                ]
             interval: 10s
             timeout: 5s
             retries: 5

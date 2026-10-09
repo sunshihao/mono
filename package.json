@@ -10,7 +10,13 @@
         "build": "pnpm --filter @repo/types build && pnpm --filter @repo/api build && pnpm --filter @repo/ingestion build && pnpm --filter @repo/data build && pnpm --filter @repo/web build",
         "typecheck": "pnpm -r typecheck",
         "test": "pnpm --filter @repo/types build && pnpm -r test",
-        "lint": "eslint ."
+        "lint": "eslint .",
+        "docker:config": "docker compose --env-file deploy/compose.env config",
+        "docker:build": "docker compose --env-file deploy/compose.env build",
+        "docker:up": "docker compose --env-file deploy/compose.env up -d --build",
+        "docker:down": "docker compose --env-file deploy/compose.env down",
+        "docker:ps": "docker compose --env-file deploy/compose.env ps",
+        "docker:logs": "docker compose --env-file deploy/compose.env logs -f --tail=100"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
@@ -20,12 +26,5 @@
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.67.0",
         "vitest": "^4.1.11"
-    },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "esbuild",
-            "protobufjs",
-            "tree-sitter"
-        ]
     }
 }

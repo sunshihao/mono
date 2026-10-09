@@ -1,8 +1,12 @@
 node_modules/
 dist/
 coverage/
-# compose 各服务的凭据文件（由同目录 *.env.example 拷贝生成；真源是根 .env）
-deploy/*.env
+# compose 各服务的凭据文件（由 deploy/*.env.example 拷贝生成；真源是根 .env）
+# 注意：deploy/compose.env 是**公开的插值变量**（端口/域名/URL），有意入库，故不在此列
+deploy/api.env
+deploy/ingestion.env
+deploy/data.env
+deploy/web.env
 .env
 .env.local
 .env.*.local
