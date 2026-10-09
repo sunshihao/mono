@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+# compose 各服务的凭据文件（由同目录 *.env.example 拷贝生成；真源是根 .env）
+deploy/*.env
 .env
 .env.local
 .env.*.local

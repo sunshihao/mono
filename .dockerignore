@@ -11,3 +11,9 @@ qdrant.md
 .git/
 .DS_Store
 *.log
+
+# apps/data 运行期状态：子仓库检出与同步进度（镜像内不做 git clone，运行期 bind mount）
+apps/data/repos/
+apps/data/.sync-state/
+# 部署编排与凭据（凭据经 compose 的 env_file 注入，绝不进镜像）
+deploy/

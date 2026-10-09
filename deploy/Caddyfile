@@ -1,0 +1,41 @@
+# Caddy 反代（compose 的 proxy profile 使用）
+# 目标：web 与 api **同源**，api 不直接暴露公网（api 自身无业务鉴权，见根 README）。
+#
+# 路由表（handle 块互斥、按顺序匹配）：
+#   /api/*           → api:3000        （handle_path 剥掉 /api 前缀，api 侧路由是 /v1/...）
+#   /webhook/github  → data:3003       （GitHub push 推送入口，路径原样透传）
+#   /webhooks/*      → ingestion:3002  （SaaS 源推送；默认关闭，见下方注释）
+#   其余              → web:3001       （Next 前端）
+#
+# 站地址由 compose 经 SITE_ADDRESS 传入：
+#   localhost → Caddy 内部 CA（浏览器需信任，仅本机自测用）
+#   真实域名   → 自动申请 Let's Encrypt 证书（需 80/443 公网可达 + DNS 已解析）
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# ---- api 网关（浏览器与 web 服务端都经此访问）----
+	handle_path /api/* {
+		reverse_proxy api:3000
+	}
+
+	# ---- data：GitHub push webhook（每仓库 HMAC secret 校验在应用内）----
+	handle /webhook/github {
+		reverse_proxy data:3003
+	}
+
+	# ---- ingestion：SaaS 数据源推送 ----
+	# 仅在确实需要 Notion/Confluence 等外部推送时启用（默认关闭，减少暴露面）：
+	# handle /webhooks/* {
+	# 	reverse_proxy ingestion:3002
+	# }
+
+	# ---- 前端 ----
+	handle {
+		reverse_proxy web:3001
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -143,15 +143,38 @@ pnpm dev:data                                     # 一体化启动（webhook+wo
 | checkpointer | MemorySaver 进程内存，重启丢状态 | PG checkpointer（drizzle 已就绪） |
 | 画布编辑 | 无撤销/重做、无节点 config 表单；router 条件为字符串约定 | 命令栈、节点属性面板、条件表达式 DSL |
 | 认证/授权 | 骨架未做 | 网关层 auth 中间件（插件机制可挂载） |
-| 编排与部署 | 无 docker-compose 服务编排；无 CI/e2e 测试 | compose 一键起 + 集成测试管线 |
+| 编排与部署 | docker compose 一键起已就绪（api/web/ingestion/data + Caddy 反代 + 可选 local-infra）；**无 CI/e2e 测试** | CI 流水线（typecheck/test/镜像构建）+ 集成测试 |
 
 ## 部署（Docker）
 
-三个服务均可从仓库根独立构建（多阶段：安装 → workspace 构建 → `pnpm deploy` 提取生产产物）：
+### 一键起：docker compose（推荐）
+
+`docker-compose.yml` 编排 api / web / ingestion / data 四服务，外加两个可选 profile（`proxy` 反代、`local-infra` 容器版基础设施）：
+
+```bash
+cp deploy/api.env.example       deploy/api.env        # 4 份凭据文件（deploy/*.env 已 gitignore）
+cp deploy/ingestion.env.example deploy/ingestion.env
+cp deploy/data.env.example      deploy/data.env
+cp deploy/web.env.example       deploy/web.env
+
+docker compose up -d --build                          # 核心四服务（端口默认只绑 127.0.0.1）
+docker compose --profile proxy up -d                  # + Caddy 同源反代（SITE_ADDRESS=<域名>）
+docker compose --profile local-infra up -d            # + 容器版 PG/Redis/Qdrant
+```
+
+- **同源反代（生产推荐）**：`NEXT_PUBLIC_API_URL=https://<域名>/api docker compose up -d --build web` —— Caddy 把 `/api/*` 剥前缀转给 api:3000，api 无需暴露公网（api 业务路由目前无鉴权，见待改进表）。
+- **GitHub webhook 入口**：Caddy 已把 `/webhook/github` 转给 data:3003（每仓库 HMAC secret 校验在应用内）；ingestion 的 `/webhooks/*` 默认不对外，按需在 `deploy/Caddyfile` 放开。
+- **data 前置**：容器内不做 `git clone`（`git.ts` 只对已存在仓库做 fetch/diff）——须先在宿主机 `git submodule add <url> apps/data/repos/<name>`；`repos/` 与 `.sync-state/` 经 bind mount 持久化，镜像已装 `git`/`openssh-client`，并放行 `safe.directory`（bind mount 属主与容器 root 不一致）。
+- **构建期内联**：`NEXT_PUBLIC_API_URL` 改动后必须重建 web 镜像（`--build`），改运行时 env 无效；web 的 CMD 是 `next start`，**不读** `/app/.env`，其变量经 `env_file` 注入。
+
+### 手工单容器
+
+四个服务均可从仓库根独立构建（多阶段：安装 → workspace 构建 → `pnpm deploy` 提取生产产物）：
 
 ```bash
 docker build -f apps/api/Dockerfile       -t repo-api       .
 docker build -f apps/ingestion/Dockerfile -t repo-ingestion .
+docker build -f apps/data/Dockerfile      -t repo-data      .
 docker build -f apps/web/Dockerfile       -t repo-web       .
 ```
 
@@ -203,7 +226,7 @@ OPENAI_API_KEY=<sk-...>
 OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
 
-**web（端口 3001）**：无需运行时 `.env`——`NEXT_PUBLIC_API_URL` 是**构建期内联**的，须在 `docker build` 时注入：
+**web（端口 3001）**：运行时只需 `AUTH_SECRET`（会话 HMAC 签名密钥，<32 字符则登录一律失败）；`NEXT_PUBLIC_API_URL` 是**构建期内联**的，须在 `docker build` 时注入：
 
 ```bash
 docker build --build-arg NEXT_PUBLIC_API_URL=http://<api-host>:3000 \
@@ -228,7 +251,9 @@ docker run -d --name repo-ingestion --env-file ./deploy/ingestion.env \
 
 ### 运维对接
 
-- **健康检查**：`GET /healthz`（存活）与 `GET /readyz`（就绪：enabled 插件全健康 200，否则 503）直接对接 k8s liveness/readiness probe。
-- **优雅停机**：api/ingestion 均监听 SIGTERM 逆序回收插件资源（redis/pool/OTel flush），k8s `terminationGracePeriodSeconds` 留 10s+ 即可。
-- **非 Edge 部署**：api/ingestion 是长驻 Node 进程（@hono/node-server），不可部署到边缘运行时（Vercel Edge/CF Workers）；web 是标准 Next.js。
+- **健康检查**：api `GET /healthz`（存活，无依赖）与 `GET /readyz`（就绪：enabled 插件全健康 200，否则 503）；data 亦有 `/healthz`、`/readyz`（后者上报 redis 可用性）。可直接对接 k8s liveness/readiness probe。compose 的 healthcheck 一律用 `/healthz`——`/readyz` 依赖远程 infra，用它做重启判据会误杀。
+- **优雅停机**：api/ingestion/data 均监听 SIGTERM 逆序回收资源（redis/pool/OTel flush），k8s `terminationGracePeriodSeconds` 留 10s+ 即可。
+- **非 Edge 部署**：api/ingestion/data 是长驻 Node 进程（@hono/node-server），不可部署到边缘运行时（Vercel Edge/CF Workers）；web 是标准 Next.js。
+- **MCP 接入**（`apps/mcp`，不进容器）：客户端本地 `claude mcp add rag-workbench -- node <repo>/apps/mcp/dist/index.js`，环境变量 `API_URL` 指向部署后的 api 地址。
+- **单副本约束**：api 的 langgraph checkpointer 是 MemorySaver（进程内存），data 的 `repos/`/`.sync-state/` 为本地卷——两者建议 replicas=1；要水平扩展先换 PG checkpointer 与共享卷。
 

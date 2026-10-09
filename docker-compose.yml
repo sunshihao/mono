@@ -1,0 +1,218 @@
+# mono —— docker compose 服务编排（api / web / ingestion / data）
+#
+# 用法
+#   1) 写凭据（凭据真源是根 .env 的 JSON 总账，按服务拆分到 deploy/*.env）：
+#        cp deploy/api.env.example       deploy/api.env
+#        cp deploy/ingestion.env.example deploy/ingestion.env
+#        cp deploy/data.env.example      deploy/data.env
+#        cp deploy/web.env.example       deploy/web.env
+#      deploy/*.env 已被 .gitignore 排除，不会入库。
+#   2) 起核心四服务：      docker compose up -d --build
+#   3) 需要同源反代/TLS：  SITE_ADDRESS=rag.example.com docker compose --profile proxy up -d
+#   4) 不用远程基础设施：  docker compose --profile local-infra up -d
+#      （起容器版 PG/Redis/Qdrant；此时各 env 里的主机名要改成 postgres/redis/qdrant）
+#
+# 访问
+#   web  http://localhost:3001        画布 / 检索面板
+#   api  http://localhost:3000        /healthz 存活、/readyz 就绪（列出各插件状态）
+#   端口默认只绑 127.0.0.1（不对外网暴露）；生产请只放行 Caddy 的 80/443。
+#
+# 两个容易踩的点
+#   * NEXT_PUBLIC_API_URL 是 Next **构建期内联**值：改动后必须 `up -d --build web`，改运行时 env 无效。
+#   * api / ingestion / data 的 CMD 带 --env-file-if-exists=.env，因此「挂载 /app/.env」也能生效；
+#     web 的 CMD 是 next start，**不读** /app/.env，其变量只能经 env_file / environment 注入。
+#
+# 需要 ≥ Compose Spec（env_file 的 required 字段自 docker compose v2.24 起支持）
+name: mono
+
+services:
+    api:
+        image: repo-api
+        build:
+            context: .
+            dockerfile: apps/api/Dockerfile
+        restart: unless-stopped
+        # required:false —— 缺文件不阻塞启动；未配置的插件按框架设计降级 disabled，
+        # 用 GET /readyz 查看实际生效的集成，生产建议改 true 或设 STRICT_INTEGRATIONS=true
+        env_file:
+            - path: deploy/api.env
+              required: false
+        ports:
+            - "127.0.0.1:${API_PORT:-3000}:3000"
+        healthcheck:
+            # /healthz 无依赖（存活）；/readyz 依赖远程 infra，用它做重启判据会误杀
+            test:
+                - CMD
+                - node
+                - "-e"
+                - "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+            interval: 15s
+            timeout: 5s
+            retries: 5
+            start_period: 20s
+
+    web:
+        image: repo-web
+        build:
+            context: .
+            dockerfile: apps/web/Dockerfile
+            args:
+                # 直连模式（默认，本机自测）：浏览器直接访问 api 的发布端口
+                # 同源模式（配 --profile proxy）：改成 https://<域名>/api 后重建
+                NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+        restart: unless-stopped
+        env_file:
+            - path: deploy/web.env
+              required: false
+        depends_on:
+            # service_started 而非 service_healthy：web 可独立存活，api 未就绪时登录会报 503
+            api:
+                condition: service_started
+        ports:
+            - "127.0.0.1:${WEB_PORT:-3001}:3001"
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - "-e"
+                - "fetch('http://127.0.0.1:3001/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+            interval: 15s
+            timeout: 5s
+            retries: 5
+            start_period: 20s
+
+    ingestion:
+        image: repo-ingestion
+        build:
+            context: .
+            dockerfile: apps/ingestion/Dockerfile
+        restart: unless-stopped
+        env_file:
+            - path: deploy/ingestion.env
+              required: false
+        environment:
+            # 容器内路径由 compose 固定（与下面的挂载目标一致），env 文件里的 INGEST_DIR 会被覆盖
+            INGEST_DIR: /data/docs
+        volumes:
+            # 被监听目录：只读挂载（ingestion 只读文件内容，不写入）
+            - ${INGEST_HOST_DIR:-./deploy/ingest-docs}:/data/docs:ro
+        ports:
+            - "127.0.0.1:${INGESTION_PORT:-3002}:3002"
+        healthcheck:
+            # 该服务无 /healthz 路由；任意 HTTP 响应（含 404）即证明监听存活
+            test:
+                - CMD
+                - node
+                - "-e"
+                - "fetch('http://127.0.0.1:3002/').then(() => process.exit(0)).catch(() => process.exit(1))"
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+
+    data:
+        image: repo-data
+        build:
+            context: .
+            dockerfile: apps/data/Dockerfile
+        restart: unless-stopped
+        env_file:
+            - path: deploy/data.env
+              required: false
+        volumes:
+            # 子仓库检出（宿主机 git submodule add / clone 后挂进来，容器不负责 clone）
+            - ${DATA_REPOS_DIR:-./apps/data/repos}:/app/repos
+            # 同步进度（事务化推进的 state，必须持久化；丢了会退化为整段重跑，但不会脏数据）
+            - ${DATA_STATE_DIR:-./apps/data/.sync-state}:/app/.sync-state
+            # 仓库↔collection 映射（改完 restart data 生效）
+            - ${DATA_CONFIG_FILE:-./apps/data/sync.config.yaml}:/app/sync.config.yaml:ro
+        ports:
+            - "127.0.0.1:${DATA_PORT:-3003}:3003"
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - "-e"
+                - "fetch('http://127.0.0.1:3003/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+
+    # ---- 反代：web 与 api 同源，只对外暴露 80/443 ----
+    # 启用：SITE_ADDRESS=<域名> docker compose --profile proxy up -d
+    # 同时把 web 的 NEXT_PUBLIC_API_URL 改为 https://<域名>/api 并重建 web
+    caddy:
+        image: caddy:2-alpine
+        profiles: ["proxy"]
+        restart: unless-stopped
+        depends_on:
+            - api
+            - web
+            - data
+        environment:
+            SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy-data:/data
+            - caddy-config:/config
+
+    # ---- 可选：容器版基础设施（不用 115.190.209.1 那套远程服务时启用）----
+    # 启用：docker compose --profile local-infra up -d
+    # 生效后把 deploy/*.env 里的主机名改为服务名：
+    #   DATABASE_URL=postgres://myappuser:***@postgres:5432/myappdb
+    #   REDIS_URL=redis://:****@redis:6379/0
+    #   QDRANT_URL=http://qdrant:6333
+    postgres:
+        image: postgres:16-alpine
+        profiles: ["local-infra"]
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-myappuser}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myapppass}
+            POSTGRES_DB: ${POSTGRES_DB:-myappdb}
+        volumes:
+            - pg-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myappuser} -d ${POSTGRES_DB:-myappdb}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    redis:
+        image: redis:7-alpine
+        profiles: ["local-infra"]
+        restart: unless-stopped
+        command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --requirepass
+            - ${REDIS_PASSWORD:-myapppass}
+        volumes:
+            - redis-data:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-myapppass}", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    qdrant:
+        image: qdrant/qdrant:latest # 生产建议钉版本（与 @qdrant/js-client-rest ^1.19 兼容的 1.12+）
+        profiles: ["local-infra"]
+        restart: unless-stopped
+        # 需要鉴权时打开（并同步各 env 的 QDRANT_API_KEY）：
+        # environment:
+        #     QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
+        volumes:
+            - qdrant-data:/qdrant/storage
+
+volumes:
+    caddy-data:
+    caddy-config:
+    pg-data:
+    redis-data:
+    qdrant-data:
