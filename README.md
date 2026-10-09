@@ -147,6 +147,8 @@ pnpm dev:data                                     # 一体化启动（webhook+wo
 
 ## 部署（Docker）
 
+> **服务器部署完整步骤见 [deploy/DEPLOY.md](deploy/DEPLOY.md)**（前置条件、逐步命令、构建镜像的三种方式、日常运维与回滚、故障排查表、安全清单）。下面是速览。
+
 ### 一键起：docker compose（推荐）
 
 `docker-compose.yml` 编排 api / web / ingestion / data 四服务，外加两个可选 profile（`proxy` 反代、`local-infra` 容器版基础设施）：
